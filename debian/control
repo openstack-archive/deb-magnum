@@ -114,6 +114,8 @@ Depends: alembic (>= 0.8.0),
          python-webob (>= 1.2.3),
          python-wsme (>= 0.7),
          python-yaml,
+         ${misc:Depends},
+         ${python:Depends},
 Description: OpenStack containers as a service - Python library
  Magnum is an OpenStack project which offers container orchestration engines
  for deploying and managing containers as first class resources in OpenStack.
@@ -127,6 +129,10 @@ Description: OpenStack containers as a service - Python library
  This package contains the Python code.
 
 Package: magum-common
+Architecture: all
+Depends: python-cinder (= ${binary:Version}),
+         ${misc:Depends},
+         ${python:Depends},
 Description: OpenStack containers as a service - API server
  Magnum is an OpenStack project which offers container orchestration engines
  for deploying and managing containers as first class resources in OpenStack.
@@ -140,6 +146,10 @@ Description: OpenStack containers as a service - API server
  This package contains common files for the engine and the conductor.
 
 Package: magnum-api
+Architecture: all
+Depends: magnum-common (= ${binary:Version}),
+         ${misc:Depends},
+         ${python:Depends},
 Description: OpenStack containers as a service
  Magnum is an OpenStack project which offers container orchestration engines
  for deploying and managing containers as first class resources in OpenStack.
@@ -153,6 +163,10 @@ Description: OpenStack containers as a service
  This package contains the API server.
 
 Package: magnum-conductor
+Architecture: all
+Depends: magnum-common (= ${binary:Version}),
+         ${misc:Depends},
+         ${python:Depends},
 Description: OpenStack containers as a service - conductor
  Magnum is an OpenStack project which offers container orchestration engines
  for deploying and managing containers as first class resources in OpenStack.
