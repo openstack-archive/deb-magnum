@@ -1,0 +1,5 @@
+magnum (1.0.0~b1-1) unstable; urgency=medium
+
+  * Initial release. (Closes: #XXXXXX)
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 30 Oct 2015 06:26:24 +0100
