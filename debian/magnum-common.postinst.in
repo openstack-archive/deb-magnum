@@ -2,6 +2,8 @@
 
 set -e
 
+CONF=/etc/magnum/magnum.conf
+
 #PKGOS-INCLUDE#
 
 if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ] ; then
@@ -13,8 +15,12 @@ if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ] ; then
 	pkgos_write_new_conf magnum magnum.conf
 	pkgos_write_new_conf magnum policy.json
 
+	pkgos_rabbit_write_conf ${CONF} oslo_messaging_rabbit magnum
+	pkgos_write_admin_creds ${CONF} keystone_authtoken magnum
+
 	db_get magnum/configure_db
 	if [ "$RET" = "true" ]; then
+		pkgos_dbc_postinst ${CONF} database connection magnum $@
 		echo "Now calling magnum-db-manage: this may take a while..."
 		su -s /bin/sh -c 'magnum-db-manage --config-file=/etc/magnum/magnum.conf upgrade' magnum
 	fi
