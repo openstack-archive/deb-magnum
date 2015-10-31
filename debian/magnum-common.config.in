@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+CONF=/etc/magnum/magnum.conf
+
+#PKGOS-INCLUDE#
+
+pkgos_var_user_group magnum
+pkgos_dbc_read_conf -pkg magnum-common ${CONF} database connection magnum $@
+pkgos_rabbit_read_conf ${CONF} DEFAULT magnum
+pkgos_read_admin_creds ${CONF} keystone_authtoken magnum
+db_go
+
+exit 0
