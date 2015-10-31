@@ -128,7 +128,7 @@ Description: OpenStack containers as a service - Python library
  .
  This package contains the Python code.
 
-Package: magum-common
+Package: magnum-common
 Architecture: all
 Depends: python-cinder (= ${binary:Version}),
          ${misc:Depends},
