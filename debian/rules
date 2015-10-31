@@ -44,6 +44,3 @@ ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 		testr-python$$PYMAJOR slowest ; \
 	done
 endif
-
-override_dh_clean:
-	dh_install --fail-missing
