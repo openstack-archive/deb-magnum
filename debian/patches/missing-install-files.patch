@@ -1,0 +1,14 @@
+Description: Missing install files
+Author: Thomas Goirand <zigo@debian.org>
+Forwarded: no
+Last-Update: 2015-10-31
+
+--- magnum-1.0.0~b1.orig/MANIFEST.in
++++ magnum-1.0.0~b1/MANIFEST.in
+@@ -5,5 +5,6 @@ exclude .gitreview
+ 
+ include magnum/db/sqlalchemy/alembic.ini
+ include magnum/db/sqlalchemy/alembic/script.py.mako
++recursive-include magnum/db/sqlalchemy *
+ 
+ global-exclude *.pyc
