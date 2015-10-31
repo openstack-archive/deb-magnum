@@ -10,7 +10,7 @@ if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ] ; then
 
 	pkgos_var_user_group magnum
 
-	pkgos_write_new_conf magnum magnum.com
+	pkgos_write_new_conf magnum magnum.conf
 	pkgos_write_new_conf magnum policy.json
 
 	db_get magnum/configure_db
