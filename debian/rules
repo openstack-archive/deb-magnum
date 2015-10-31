@@ -6,12 +6,8 @@ export OSLO_PACKAGE_VERSION=$(shell dpkg-parsechangelog | grep Version: | cut -d
 %:
 	dh $@ --buildsystem=python_distutils --with python2,systemd,sphinxdoc
 
-
-override_dh_clean:
-	rm -f debian/magnum-common.config debian/magnum-common.postinst debian/magnum-api.config debian/magnum-api.postinst
-	rm -rf debian/*.upstart debian/*.service debian/*.init
-
-override_dh_auto_build:
+override_dh_install:
+	dh_install
 	mkdir -p $(CURDIR)/debian/magnum-common/usr/share/magnum-common
 	oslo-config-generator --output-file $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf \
 		--namespace magnum \
@@ -28,6 +24,10 @@ override_dh_auto_build:
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-common.config
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-api.postinst
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-api.config
+
+override_dh_clean:
+	rm -f debian/magnum-common.config debian/magnum-common.postinst debian/magnum-api.config debian/magnum-api.postinst
+	rm -rf debian/*.upstart debian/*.service debian/*.init
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
