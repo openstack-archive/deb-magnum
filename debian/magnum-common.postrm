@@ -5,8 +5,21 @@ set -e
 if [ "$1" = "purge" ] && [ -f /usr/share/debconf/confmodule ] ; then
 	if [ -f /usr/share/debconf/confmodule ] ; then
 		. /usr/share/debconf/confmodule
+                db_get magnum/configure_db || true
+                if [ "$RET" = "true" ]; then
+                        if [ -f /usr/share/dbconfig-common/dpkg/postrm ]; then
+                                . /usr/share/dbconfig-common/dpkg/postrm
+                                dbc_go magnum-common $@
+                        else
+                                rm -f /etc/dbconfig-common/magnum-common.conf
+                                if which ucf >/dev/null 2>&1; then
+                                        ucf --purge /etc/dbconfig-common/magnum-common.conf
+                                        ucfr --purge magnum-common /etc/dbconfig-common/magnum-common.conf
+                                fi
+                        fi
+                fi
 	fi
-	rm -rf /etc/magnum
+	rm -rf /etc/magnum /var/log/magnum /var/lib/magnum /var/lock/magnum
 fi
 
 #DEBHELPER#
