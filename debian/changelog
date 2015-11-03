@@ -1,3 +1,9 @@
+magnum (1.0.0~b1-2) unstable; urgency=medium
+
+  * Rebuilt with openstack-pkg-tools 37 to use Keystone API v3.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 03 Nov 2015 08:29:29 +0000
+
 magnum (1.0.0~b1-1) unstable; urgency=medium
 
   * Initial release. (Closes: #803532)
