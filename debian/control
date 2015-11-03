@@ -150,6 +150,7 @@ Description: OpenStack containers as a service - API server
 Package: magnum-api
 Architecture: all
 Depends: magnum-common (= ${binary:Version}),
+         q-text-as-data,
          ${misc:Depends},
          ${python:Depends},
 Description: OpenStack containers as a service

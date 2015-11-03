@@ -1,3 +1,9 @@
+magnum (1.0.0~b1-3) unstable; urgency=medium
+
+  * Added q-text-as-data in depends for magnum-api.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 03 Nov 2015 11:45:32 +0000
+
 magnum (1.0.0~b1-2) unstable; urgency=medium
 
   * Rebuilt with openstack-pkg-tools 37 to use Keystone API v3.
