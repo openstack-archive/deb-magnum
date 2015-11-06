@@ -1,3 +1,10 @@
+magnum (1.0.0~b1-4) unstable; urgency=medium
+
+  * Added missing magnum-common dbconfig-common dependency (Closes: #804107).
+  * Added python-openstackclient depends in magnum-api.
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 06 Nov 2015 11:03:26 +0100
+
 magnum (1.0.0~b1-3) unstable; urgency=medium
 
   * Added q-text-as-data in depends for magnum-api.

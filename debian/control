@@ -131,6 +131,7 @@ Description: OpenStack containers as a service - Python library
 Package: magnum-common
 Architecture: all
 Depends: adduser,
+         dbconfig-common,
          debconf,
          python-magnum (= ${binary:Version}),
          ${misc:Depends},
@@ -150,6 +151,7 @@ Description: OpenStack containers as a service - API server
 Package: magnum-api
 Architecture: all
 Depends: magnum-common (= ${binary:Version}),
+         python-openstackclient,
          q-text-as-data,
          ${misc:Depends},
          ${python:Depends},
