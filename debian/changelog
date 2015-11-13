@@ -1,3 +1,9 @@
+magnum (1.0.0~b1-5) unstable; urgency=medium
+
+  * Import po files from Glance (Closes: #804126).
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 13 Nov 2015 09:51:23 +0100
+
 magnum (1.0.0~b1-4) unstable; urgency=medium
 
   * Added missing magnum-common dbconfig-common dependency (Closes: #804107).
