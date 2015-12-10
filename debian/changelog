@@ -1,3 +1,9 @@
+magnum (1.1.0-1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 10 Dec 2015 23:49:16 +0100
+
 magnum (1.0.0~b1-5) unstable; urgency=medium
 
   * Import po files from Glance (Closes: #804126).
