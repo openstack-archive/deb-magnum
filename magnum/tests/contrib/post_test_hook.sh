@@ -35,12 +35,7 @@ set -o xtrace
 echo_summary "magnum's post_test_hook.sh was called..."
 (set -o posix; set)
 
-if [[ "$USE_CONSTRAINTS" == "True" ]]; then
-    constraints="-c $REQUIREMENTS_DIR/upper-constraints.txt"
-else
-    constraints=""
-fi
-# XXX(lifeless) This should probably use setup_dev or some such.
+constraints="-c $REQUIREMENTS_DIR/upper-constraints.txt"
 sudo pip install $constraints -U -r requirements.txt -r test-requirements.txt
 
 export MAGNUM_DIR="$BASE/new/magnum"
@@ -87,6 +82,10 @@ keypair_id = default
 flavor_id = m1.magnum
 EOF
 
+# Note(eliqiao): Let's keep this only for debugging on gate.
+echo_summary $CREDS_FILE
+cat $CREDS_FILE
+
 # Create a keypair for use in the functional tests.
 echo_summary "Generate a key-pair"
 nova keypair-add default
@@ -96,8 +95,11 @@ echo_summary "Create a flavor"
 nova flavor-create  m1.magnum 100 2048 8 1
 
 # Run functional tests
-echo "Running magnum functional test suite"
-sudo -E -H -u jenkins tox -e functional -- --concurrency=1
+# Currently we support functional-api, functional-k8s, will support swarm,
+# mesos later.
+
+echo "Running magnum functional test suite for $1"
+sudo -E -H -u jenkins tox -e functional-$1 -- --concurrency=1
 EXIT_CODE=$?
 
 # Delete the keypair used in the functional test.
@@ -107,6 +109,12 @@ nova keypair-delete default
 # Delete the flavor used in the functional test.
 echo_summary "Running flavor-delete"
 nova flavor-delete m1.magnum
+
+# Save functional testing log
+sudo cp $MAGNUM_DIR/functional-tests.log /opt/stack/logs/
+
+# Save functional_creds.conf
+sudo cp $CREDS_FILE /opt/stack/logs/
 
 # Save the logs
 sudo mv ../logs/* /opt/stack/logs/

@@ -49,11 +49,16 @@ def validate_sort_dir(sort_dir):
 def apply_jsonpatch(doc, patch):
     for p in patch:
         if p['op'] == 'add' and p['path'].count('/') == 1:
-            if p['path'].lstrip('/') not in doc:
-                msg = _('Adding a new attribute (%s) to the root of '
-                        ' the resource is not allowed')
-                raise wsme.exc.ClientSideError(msg % p['path'])
-    return jsonpatch.apply_patch(doc, jsonpatch.JsonPatch(patch))
+            attr = p['path'].lstrip('/')
+            if attr not in doc:
+                msg = _("Adding a new attribute %s to the root of "
+                        "the resource is not allowed.") % p['path']
+                raise wsme.exc.ClientSideError(msg)
+            if doc[attr] is not None:
+                msg = _("The attribute %s has existed, please use "
+                        "'replace' operation instead.") % p['path']
+                raise wsme.exc.ClientSideError(msg)
+    return jsonpatch.apply_patch(doc, patch)
 
 
 def get_rpc_resource(resource, resource_ident):

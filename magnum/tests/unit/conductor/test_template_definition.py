@@ -153,32 +153,6 @@ class TemplateDefinitionTestCase(base.TestCase):
         self.assertIn(mock_mapping_type.return_value,
                       definition.output_mappings)
 
-    def test_update_outputs(self):
-        definition = tdef.TemplateDefinition.get_template_definition(
-            'vm',
-            'fedora-atomic',
-            'kubernetes')
-
-        expected_node_addresses = ['ex_minion', 'address']
-
-        outputs = [
-            {"output_value": expected_node_addresses,
-             "description": "No description given",
-             "output_key": "kube_minions_external"},
-            {"output_value": ['any', 'output'],
-             "description": "No description given",
-             "output_key": "kube_minions"}
-        ]
-        mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
-        mock_bay = mock.MagicMock()
-        mock_bay.api_address = None
-        mock_baymodel = mock.MagicMock()
-
-        definition.update_outputs(mock_stack, mock_baymodel, mock_bay)
-
-        self.assertEqual(expected_node_addresses, mock_bay.node_addresses)
-
 
 class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
 
@@ -327,12 +301,30 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
                           tdef.AtomicK8sTemplateDefinition().get_discovery_url,
                           fake_bay)
 
-    def test_update_outputs_api_address(self):
+    def _test_update_outputs_api_address(self, coe, params, tls=True):
+
         definition = tdef.TemplateDefinition.get_template_definition(
             'vm',
             'fedora-atomic',
-            'kubernetes')
+            coe)
+        expected_api_address = '%(protocol)s://%(address)s:%(port)s' % params
 
+        outputs = [
+            {"output_value": params['address'],
+             "description": "No description given",
+             "output_key": 'api_address'},
+        ]
+        mock_stack = mock.MagicMock()
+        mock_stack.outputs = outputs
+        mock_bay = mock.MagicMock()
+        mock_baymodel = mock.MagicMock()
+        mock_baymodel.tls_disabled = tls
+
+        definition.update_outputs(mock_stack, mock_baymodel, mock_bay)
+
+        self.assertEqual(expected_api_address, mock_bay.api_address)
+
+    def test_update_k8s_outputs_api_address(self):
         address = 'updated_address'
         protocol = 'http'
         port = '8080'
@@ -341,29 +333,20 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
             'address': address,
             'port': port,
         }
-        expected_api_address = '%(protocol)s://%(address)s:%(port)s' % params
+        self._test_update_outputs_api_address('kubernetes', params)
 
-        outputs = [
-            {"output_value": address,
-             "description": "No description given",
-             "output_key": "api_address"},
-        ]
-        mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
-        mock_bay = mock.MagicMock()
-        mock_baymodel = mock.MagicMock()
-        mock_baymodel.tls_disabled = True
+    def test_update_swarm_outputs_api_address(self):
+        address = 'updated_address'
+        protocol = 'tcp'
+        port = '2376'
+        params = {
+            'protocol': protocol,
+            'address': address,
+            'port': port,
+        }
+        self._test_update_outputs_api_address('swarm', params)
 
-        definition.update_outputs(mock_stack, mock_baymodel, mock_bay)
-
-        self.assertEqual(expected_api_address, mock_bay.api_address)
-
-    def test_update_outputs_if_baymodel_is_secure(self):
-        definition = tdef.TemplateDefinition.get_template_definition(
-            'vm',
-            'fedora-atomic',
-            'kubernetes')
-
+    def test_update_k8s_outputs_if_baymodel_is_secure(self):
         address = 'updated_address'
         protocol = 'https'
         port = '6443'
@@ -372,88 +355,136 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
             'address': address,
             'port': port,
         }
-        expected_api_address = '%(protocol)s://%(address)s:%(port)s' % params
+        self._test_update_outputs_api_address('kubernetes', params, tls=False)
 
-        outputs = [
-            {"output_value": address,
-             "description": "No description given",
-             "output_key": "api_address"},
-        ]
-        mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
-        mock_bay = mock.MagicMock()
-        mock_baymodel = mock.MagicMock()
-        mock_baymodel.tls_disabled = False
-
-        definition.update_outputs(mock_stack, mock_baymodel, mock_bay)
-        self.assertEqual(expected_api_address, mock_bay.api_address)
+    def test_update_swarm_outputs_if_baymodel_is_secure(self):
+        address = 'updated_address'
+        protocol = 'https'
+        port = '2376'
+        params = {
+            'protocol': protocol,
+            'address': address,
+            'port': port,
+        }
+        self._test_update_outputs_api_address('swarm', params, tls=False)
 
 
 class AtomicSwarmTemplateDefinitionTestCase(base.TestCase):
 
-    @mock.patch('requests.post')
-    def test_swarm_discovery_url_public_token(self, mock_post):
+    @mock.patch('magnum.common.clients.OpenStackClients')
+    @mock.patch('magnum.conductor.template_definition'
+                '.AtomicSwarmTemplateDefinition.get_discovery_url')
+    @mock.patch('magnum.conductor.template_definition.BaseTemplateDefinition'
+                '.get_params')
+    @mock.patch('magnum.conductor.template_definition.TemplateDefinition'
+                '.get_output')
+    def test_swarm_get_params(self, mock_get_output, mock_get_params,
+                              mock_get_discovery_url, mock_osc_class):
+        mock_context = mock.MagicMock()
+        mock_context.auth_token = 'AUTH_TOKEN'
+        mock_baymodel = mock.MagicMock()
+        mock_baymodel.tls_disabled = False
+        mock_bay = mock.MagicMock()
+        mock_bay.uuid = 'bay-xx-xx-xx-xx'
+        del mock_bay.stack_id
+        mock_osc = mock.MagicMock()
+        mock_osc.magnum_url.return_value = 'http://127.0.0.1:9511/v1'
+        mock_osc_class.return_value = mock_osc
 
+        mock_get_discovery_url.return_value = 'fake_discovery_url'
+
+        mock_context.auth_url = 'http://192.168.10.10:5000/v3'
+        mock_context.user_name = 'fake_user'
+        mock_context.tenant = 'fake_tenant'
+
+        flannel_cidr = mock_baymodel.labels.get('flannel_network_cidr')
+        flannel_subnet = mock_baymodel.labels.get('flannel_network_subnetlen')
+        flannel_vxlan = mock_baymodel.labels.get('flannel_use_vxlan')
+
+        swarm_def = tdef.AtomicSwarmTemplateDefinition()
+
+        swarm_def.get_params(mock_context, mock_baymodel, mock_bay)
+
+        expected_kwargs = {'extra_params': {
+            'discovery_url': 'fake_discovery_url',
+            'user_token': mock_context.auth_token,
+            'magnum_url': mock_osc.magnum_url.return_value,
+            'flannel_network_cidr': flannel_cidr,
+            'flannel_use_vxlan': flannel_subnet,
+            'flannel_network_subnetlen': flannel_vxlan}}
+        mock_get_params.assert_called_once_with(mock_context, mock_baymodel,
+                                                mock_bay, **expected_kwargs)
+
+    @mock.patch('requests.get')
+    def test_swarm_get_discovery_url(self, mock_get):
+        cfg.CONF.set_override('etcd_discovery_service_endpoint_format',
+                              'http://etcd/test?size=%(size)d',
+                              group='bay')
+        expected_discovery_url = 'http://etcd/token'
         mock_resp = mock.MagicMock()
-        mock_resp.text = 'some_token'
-        mock_post.return_value = mock_resp
-
+        mock_resp.text = expected_discovery_url
+        mock_get.return_value = mock_resp
         mock_bay = mock.MagicMock()
         mock_bay.discovery_url = None
-        mock_bay.id = 1
-        mock_bay.uuid = 'some_uuid'
 
         swarm_def = tdef.AtomicSwarmTemplateDefinition()
-        actual_url = swarm_def.get_discovery_url(mock_bay)
+        discovery_url = swarm_def.get_discovery_url(mock_bay)
 
-        self.assertEqual('token://some_token', actual_url)
+        mock_get.assert_called_once_with('http://etcd/test?size=1')
+        self.assertEqual(mock_bay.discovery_url, expected_discovery_url)
+        self.assertEqual(discovery_url, expected_discovery_url)
 
-    def test_swarm_discovery_url_format_bay_id(self):
-        cfg.CONF.set_override('public_swarm_discovery', False, group='bay')
-        cfg.CONF.set_override('swarm_discovery_url_format',
-                              'etcd://test.com/bay-%(bay_id)s', group='bay')
+    @mock.patch('requests.get')
+    def test_swarm_get_discovery_url_not_found(self, mock_get):
+        mock_resp = mock.MagicMock()
+        mock_resp.text = ''
+        mock_get.return_value = mock_resp
 
-        mock_bay = mock.MagicMock()
-        mock_bay.discovery_url = None
-        mock_bay.id = 1
-        mock_bay.uuid = 'some_uuid'
+        fake_bay = mock.MagicMock()
+        fake_bay.discovery_url = None
 
-        swarm_def = tdef.AtomicSwarmTemplateDefinition()
-        actual_url = swarm_def.get_discovery_url(mock_bay)
-
-        self.assertEqual('etcd://test.com/bay-1', actual_url)
-
-    def test_swarm_discovery_url_format_bay_uuid(self):
-        cfg.CONF.set_override('public_swarm_discovery', False, group='bay')
-        cfg.CONF.set_override('swarm_discovery_url_format',
-                              'etcd://test.com/bay-%(bay_uuid)s', group='bay')
-
-        mock_bay = mock.MagicMock()
-        mock_bay.discovery_url = None
-        mock_bay.id = 1
-        mock_bay.uuid = 'some_uuid'
-
-        swarm_def = tdef.AtomicSwarmTemplateDefinition()
-        actual_url = swarm_def.get_discovery_url(mock_bay)
-
-        self.assertEqual('etcd://test.com/bay-some_uuid', actual_url)
-
-    def test_swarm_discovery_url_from_bay(self):
-        mock_bay = mock.MagicMock()
-        mock_bay.discovery_url = 'token://some_token'
-        mock_bay.id = 1
-        mock_bay.uuid = 'some_uuid'
-
-        swarm_def = tdef.AtomicSwarmTemplateDefinition()
-        actual_url = swarm_def.get_discovery_url(mock_bay)
-
-        self.assertEqual(mock_bay.discovery_url, actual_url)
+        self.assertRaises(exception.InvalidDiscoveryURL,
+                          tdef.AtomicK8sTemplateDefinition().get_discovery_url,
+                          fake_bay)
 
     def test_swarm_get_heat_param(self):
         swarm_def = tdef.AtomicSwarmTemplateDefinition()
 
         heat_param = swarm_def.get_heat_param(bay_attr='node_count')
         self.assertEqual('number_of_nodes', heat_param)
+
+    def test_update_outputs(self):
+        swarm_def = tdef.AtomicSwarmTemplateDefinition()
+
+        expected_api_address = 'updated_address'
+        expected_node_addresses = ['ex_minion', 'address']
+
+        outputs = [
+            {"output_value": expected_api_address,
+             "description": "No description given",
+             "output_key": "api_address"},
+            {"output_value": ['any', 'output'],
+             "description": "No description given",
+             "output_key": "swarm_master_private"},
+            {"output_value": ['any', 'output'],
+             "description": "No description given",
+             "output_key": "swarm_master"},
+            {"output_value": ['any', 'output'],
+             "description": "No description given",
+             "output_key": "swarm_nodes_private"},
+            {"output_value": expected_node_addresses,
+             "description": "No description given",
+             "output_key": "swarm_nodes"},
+        ]
+        mock_stack = mock.MagicMock()
+        mock_stack.outputs = outputs
+        mock_bay = mock.MagicMock()
+        mock_baymodel = mock.MagicMock()
+
+        swarm_def.update_outputs(mock_stack, mock_baymodel, mock_bay)
+        expected_api_address = "tcp://%s:2376" % expected_api_address
+        self.assertEqual(expected_api_address, mock_bay.api_address)
+        self.assertEqual(expected_node_addresses, mock_bay.node_addresses)
 
 
 class UbuntuMesosTemplateDefinitionTestCase(base.TestCase):
@@ -463,3 +494,38 @@ class UbuntuMesosTemplateDefinitionTestCase(base.TestCase):
 
         heat_param = mesos_def.get_heat_param(bay_attr='node_count')
         self.assertEqual('number_of_slaves', heat_param)
+
+    def test_update_outputs(self):
+        mesos_def = tdef.UbuntuMesosTemplateDefinition()
+
+        expected_api_address = 'updated_address'
+        expected_node_addresses = ['ex_slave', 'address']
+        expected_master_addresses = ['ex_master', 'address']
+
+        outputs = [
+            {"output_value": expected_api_address,
+             "description": "No description given",
+             "output_key": "api_address"},
+            {"output_value": ['any', 'output'],
+             "description": "No description given",
+             "output_key": "mesos_master_private"},
+            {"output_value": expected_master_addresses,
+             "description": "No description given",
+             "output_key": "mesos_master"},
+            {"output_value": ['any', 'output'],
+             "description": "No description given",
+             "output_key": "mesos_slaves_private"},
+            {"output_value": expected_node_addresses,
+             "description": "No description given",
+             "output_key": "mesos_slaves"},
+        ]
+        mock_stack = mock.MagicMock()
+        mock_stack.outputs = outputs
+        mock_bay = mock.MagicMock()
+        mock_baymodel = mock.MagicMock()
+
+        mesos_def.update_outputs(mock_stack, mock_baymodel, mock_bay)
+
+        self.assertEqual(expected_api_address, mock_bay.api_address)
+        self.assertEqual(expected_node_addresses, mock_bay.node_addresses)
+        self.assertEqual(expected_master_addresses, mock_bay.master_addresses)

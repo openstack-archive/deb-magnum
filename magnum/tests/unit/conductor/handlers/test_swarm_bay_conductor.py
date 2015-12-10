@@ -20,7 +20,6 @@ from magnum.tests import base
 
 import mock
 from mock import patch
-from oslo_config import cfg
 
 
 class TestBayConductorWithSwarm(base.TestCase):
@@ -31,6 +30,7 @@ class TestBayConductorWithSwarm(base.TestCase):
             'flavor_id': 'flavor_id',
             'keypair_id': 'keypair_id',
             'dns_nameserver': 'dns_nameserver',
+            'docker_volume_size': 20,
             'external_network_id': 'external_network_id',
             'fixed_network': '10.2.0.0/22',
             'cluster_distro': 'fedora-atomic',
@@ -38,7 +38,12 @@ class TestBayConductorWithSwarm(base.TestCase):
             'http_proxy': 'http_proxy',
             'https_proxy': 'https_proxy',
             'no_proxy': 'no_proxy',
-            'tls_disabled': False
+            'tls_disabled': False,
+            'server_type': 'vm',
+            'network_driver': 'network_driver',
+            'labels': {'flannel_network_cidr': '10.101.0.0/16',
+                       'flannel_network_subnetlen': '26',
+                       'flannel_use_vxlan': 'yes'}
         }
         self.bay_dict = {
             'id': 1,
@@ -49,7 +54,7 @@ class TestBayConductorWithSwarm(base.TestCase):
             'api_address': '172.17.2.3',
             'node_addresses': ['172.17.2.4'],
             'node_count': 1,
-            'discovery_url': 'token://39987da72f8386e0d0225ae8929e7cb4',
+            'discovery_url': 'https://discovery.test.io/123456789',
         }
         osc_patcher = mock.patch('magnum.common.clients.OpenStackClients')
         self.mock_osc_class = osc_patcher.start()
@@ -79,16 +84,20 @@ class TestBayConductorWithSwarm(base.TestCase):
             'server_image': 'image_id',
             'server_flavor': 'flavor_id',
             'number_of_nodes': '1',
+            'docker_volume_size': 20,
             'fixed_network_cidr': '10.2.0.0/22',
-            'discovery_url': 'token://39987da72f8386e0d0225ae8929e7cb4',
+            'discovery_url': 'https://discovery.test.io/123456789',
             'http_proxy': 'http_proxy',
             'https_proxy': 'https_proxy',
             'no_proxy': 'no_proxy',
             'user_token': 'fake_token',
             'bay_uuid': 'some_uuid',
             'magnum_url': self.mock_osc.magnum_url.return_value,
-            'tls_disabled': False
-
+            'tls_disabled': False,
+            'network_driver': 'network_driver',
+            'flannel_network_cidr': '10.101.0.0/16',
+            'flannel_network_subnetlen': '26',
+            'flannel_use_vxlan': 'yes'
         }
         self.assertEqual(expected, definition)
 
@@ -96,16 +105,13 @@ class TestBayConductorWithSwarm(base.TestCase):
     def test_extract_template_definition_only_required(
             self,
             mock_objects_baymodel_get_by_uuid):
-        cfg.CONF.set_override('public_swarm_discovery', False, group='bay')
-        cfg.CONF.set_override('swarm_discovery_url_format',
-                              'test_discovery', group='bay')
 
         not_required = ['image_id', 'flavor_id', 'dns_nameserver',
-                        'fixed_network', 'http_proxy', 'https_proxy',
-                        'no_proxy']
+                        'docker_volume_size', 'fixed_network', 'http_proxy',
+                        'https_proxy', 'no_proxy', 'network_driver']
         for key in not_required:
             self.baymodel_dict[key] = None
-        self.bay_dict['discovery_url'] = None
+        self.bay_dict['discovery_url'] = 'https://discovery.etcd.io/test'
 
         baymodel = objects.BayModel(self.context, **self.baymodel_dict)
         mock_objects_baymodel_get_by_uuid.return_value = baymodel
@@ -119,11 +125,14 @@ class TestBayConductorWithSwarm(base.TestCase):
             'ssh_key_name': 'keypair_id',
             'external_network': 'external_network_id',
             'number_of_nodes': '1',
-            'discovery_url': 'test_discovery',
+            'discovery_url': 'https://discovery.etcd.io/test',
             'user_token': 'fake_token',
             'bay_uuid': 'some_uuid',
             'magnum_url': self.mock_osc.magnum_url.return_value,
-            'tls_disabled': False
+            'tls_disabled': False,
+            'flannel_network_cidr': u'10.101.0.0/16',
+            'flannel_network_subnetlen': u'26',
+            'flannel_use_vxlan': u'yes'
         }
         self.assertEqual(expected, definition)
 

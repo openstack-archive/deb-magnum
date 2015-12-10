@@ -47,7 +47,6 @@ bay_heat_opts = [
                help=('Sleep time interval between two attempts of querying '
                      'the Heat stack.  This interval is in seconds.')),
     cfg.IntOpt('bay_create_timeout',
-               default=None,
                help=('The length of time to let bay creation continue.  This '
                      'interval is in minutes.  The default is no timeout.'))
 ]
@@ -62,7 +61,9 @@ def _extract_template_definition(context, bay, scale_manager=None):
     baymodel = conductor_utils.retrieve_baymodel(context, bay)
     cluster_distro = baymodel.cluster_distro
     cluster_coe = baymodel.coe
-    definition = TDef.get_template_definition('vm', cluster_distro,
+    cluster_server_type = baymodel.server_type
+    definition = TDef.get_template_definition(cluster_server_type,
+                                              cluster_distro,
                                               cluster_coe)
     return definition.extract_definition(context, baymodel, bay,
                                          scale_manager=scale_manager)
@@ -217,7 +218,8 @@ class HeatPoller(object):
         self.attempts = 0
         self.baymodel = conductor_utils.retrieve_baymodel(self.context, bay)
         self.template_def = TDef.get_template_definition(
-            'vm', self.baymodel.cluster_distro, self.baymodel.coe)
+            self.baymodel.server_type,
+            self.baymodel.cluster_distro, self.baymodel.coe)
 
     def poll_and_check(self):
         # TODO(yuanying): temporary implementation to update api_address,
@@ -227,50 +229,21 @@ class HeatPoller(object):
         # poll_and_check is detached and polling long time to check status,
         # so another user/client can call delete bay/stack.
         if stack.stack_status == bay_status.DELETE_COMPLETE:
-            LOG.info(_LI('Bay has been deleted, stack_id: %s')
-                     % self.bay.stack_id)
-            try:
-                cert_manager.delete_certificates_from_bay(self.bay)
-                self.bay.destroy()
-            except exception.BayNotFound:
-                LOG.info(_LI('The bay %s has been deleted by others.')
-                         % self.bay.uuid)
+            self._delete_complete()
             raise loopingcall.LoopingCallDone()
-        if (stack.stack_status in [bay_status.CREATE_COMPLETE,
-                                   bay_status.UPDATE_COMPLETE]):
-            self.template_def.update_outputs(stack, self.baymodel, self.bay)
 
-            self.bay.status = stack.stack_status
-            self.bay.status_reason = stack.stack_status_reason
-            stack_nc_param = self.template_def.get_heat_param(
-                bay_attr='node_count')
-            self.bay.node_count = stack.parameters[stack_nc_param]
-            self.bay.save()
+        if stack.stack_status in (bay_status.CREATE_COMPLETE,
+                                  bay_status.UPDATE_COMPLETE):
+            self._sync_bay_and_template_status(stack)
             raise loopingcall.LoopingCallDone()
         elif stack.stack_status != self.bay.status:
-            self.bay.status = stack.stack_status
-            self.bay.status_reason = stack.stack_status_reason
-            stack_nc_param = self.template_def.get_heat_param(
-                bay_attr='node_count')
-            self.bay.node_count = stack.parameters[stack_nc_param]
-            self.bay.save()
-        if stack.stack_status == bay_status.CREATE_FAILED:
-            LOG.error(_LE('Unable to create bay, stack_id: %(stack_id)s, '
-                          'reason: %(reason)s') %
-                      {'stack_id': self.bay.stack_id,
-                       'reason': stack.stack_status_reason})
-            raise loopingcall.LoopingCallDone()
-        if stack.stack_status == bay_status.DELETE_FAILED:
-            LOG.error(_LE('Unable to delete bay, stack_id: %(stack_id)s, '
-                          'reason: %(reason)s') %
-                      {'stack_id': self.bay.stack_id,
-                       'reason': stack.stack_status_reason})
-            raise loopingcall.LoopingCallDone()
-        if stack.stack_status == bay_status.UPDATE_FAILED:
-            LOG.error(_LE('Unable to update bay, stack_id: %(stack_id)s, '
-                          'reason: %(reason)s') %
-                      {'stack_id': self.bay.stack_id,
-                       'reason': stack.stack_status_reason})
+            self._sync_bay_status(stack)
+
+        if stack.stack_status in (bay_status.CREATE_FAILED,
+                                  bay_status.DELETE_FAILED,
+                                  bay_status.UPDATE_FAILED):
+            self._sync_bay_and_template_status(stack)
+            self._bay_failed(stack)
             raise loopingcall.LoopingCallDone()
         # only check max attempts when the stack is being created when
         # the timeout hasn't been set. If the timeout has been set then
@@ -292,3 +265,33 @@ class HeatPoller(object):
                            'id': self.bay.stack_id,
                            'status': stack.stack_status})
                 raise loopingcall.LoopingCallDone()
+
+    def _delete_complete(self):
+        LOG.info(_LI('Bay has been deleted, stack_id: %s')
+                 % self.bay.stack_id)
+        try:
+            cert_manager.delete_certificates_from_bay(self.bay)
+            self.bay.destroy()
+        except exception.BayNotFound:
+            LOG.info(_LI('The bay %s has been deleted by others.')
+                     % self.bay.uuid)
+
+    def _sync_bay_status(self, stack):
+        self.bay.status = stack.stack_status
+        self.bay.status_reason = stack.stack_status_reason
+        stack_nc_param = self.template_def.get_heat_param(
+            bay_attr='node_count')
+        self.bay.node_count = stack.parameters[stack_nc_param]
+        self.bay.save()
+
+    def _sync_bay_and_template_status(self, stack):
+        self.template_def.update_outputs(stack, self.baymodel, self.bay)
+        self._sync_bay_status(stack)
+
+    def _bay_failed(self, stack):
+        LOG.error(_LE('Bay error, stack status: %(bay_status)s, '
+                      'stack_id: %(stack_id)s, '
+                      'reason: %(reason)s') %
+                  {'bay_status': stack.stack_status,
+                   'stack_id': self.bay.stack_id,
+                   'reason': self.bay.status_reason})

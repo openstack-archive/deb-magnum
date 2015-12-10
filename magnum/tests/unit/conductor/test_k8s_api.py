@@ -82,8 +82,11 @@ class TestK8sAPI(base.TestCase):
         context = 'context'
 
         obj = getattr(objects, cls)({})
-        self.assertFalse(hasattr(obj, 'bay_uuid'))
-        obj.bay_uuid = 'bay-uuid'
+        if cls is not 'Bay':
+            self.assertFalse(hasattr(obj, 'bay_uuid'))
+            obj.bay_uuid = 'bay-uuid'
+        else:
+            obj = bay_obj
 
         with patch(
             'magnum.conductor.k8s_api.K8sAPI._create_temp_file_with_content',
@@ -98,7 +101,8 @@ class TestK8sAPI(base.TestCase):
                         side_effect=self._mock_cert_mgr_get_cert):
                     k8s_api.create_k8s_api(context, obj)
 
-        mock_bay_retrieval.assert_called_once_with(context, obj)
+        if cls is not 'Bay':
+            mock_bay_retrieval.assert_called_once_with(context, obj.bay_uuid)
 
         mock_api_client.assert_called_once_with(
             bay_obj.api_address,

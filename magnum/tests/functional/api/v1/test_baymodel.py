@@ -131,12 +131,12 @@ class BayModelTest(base.BaseMagnumTest):
             bay_model_client.get_baymodel, 'fooo')
 
     @testtools.testcase.attr('negative')
-    def test_update_baymodel_invalid_uuid(self):
+    def test_update_baymodel_name_not_found(self):
         patch_model = datagen.random_baymodel_name_patch_data()
 
         bay_model_client = cli.BayModelClient.as_user('default')
         self.assertRaises(
-            exceptions.BadRequest,
+            exceptions.NotFound,
             bay_model_client.patch_baymodel, 'fooo', patch_model)
 
     @testtools.testcase.attr('negative')
@@ -172,3 +172,12 @@ class BayModelTest(base.BaseMagnumTest):
         self.assertRaises(
             exceptions.BadRequest,
             bay_model_client.patch_baymodel, datagen.random_uuid(), gen_model)
+
+    @testtools.testcase.attr('negative')
+    def test_create_baymodel_invalid_network_driver(self):
+        bay_model_client = cli.BayModelClient.as_user('default')
+        gen_model = datagen.random_baymodel_data_w_valid_keypair_and_image_id()
+        gen_model.network_driver = 'invalid_network_driver'
+        self.assertRaises(
+            exceptions.BadRequest,
+            bay_model_client.post_baymodel, gen_model)

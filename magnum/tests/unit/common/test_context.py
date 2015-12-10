@@ -47,7 +47,7 @@ class ContextTestCase(base.TestCase):
         self.assertEqual("tenant1", ctx.project_name)
         self.assertEqual("tenant-id1", ctx.project_id)
         for role in ctx.roles:
-            self.assertTrue(role in ['admin', 'service'])
+            self.assertIn(role, ['admin', 'service'])
         self.assertTrue(ctx.is_admin)
         self.assertTrue(ctx.read_only)
         self.assertTrue(ctx.show_deleted)
@@ -78,4 +78,4 @@ class ContextTestCase(base.TestCase):
 
     def test_request_context_sets_is_admin(self):
         ctxt = magnum_context.make_admin_context()
-        self.assertEqual(True, ctxt.is_admin)
+        self.assertTrue(ctxt.is_admin)

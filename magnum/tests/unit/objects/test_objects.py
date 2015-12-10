@@ -96,17 +96,16 @@ class TestSubclassedObject(MyObj):
 class TestUtils(test_base.TestCase):
 
     def test_datetime_or_none(self):
-        naive_dt = datetime.datetime.now()
-        dt = timeutils.parse_isotime(timeutils.isotime(naive_dt))
+        naive_dt = timeutils.utcnow()
+        dt = timeutils.parse_isotime(datetime.datetime.isoformat(naive_dt))
         self.assertEqual(dt, utils.datetime_or_none(dt))
-        self.assertEqual(naive_dt.replace(tzinfo=iso8601.iso8601.Utc(),
-                                          microsecond=0),
+        self.assertEqual(naive_dt.replace(tzinfo=iso8601.iso8601.Utc()),
                          utils.datetime_or_none(dt))
         self.assertIsNone(utils.datetime_or_none(None))
         self.assertRaises(ValueError, utils.datetime_or_none, 'foo')
 
     def test_datetime_or_str_or_none(self):
-        dts = timeutils.isotime()
+        dts = datetime.datetime.isoformat(timeutils.utcnow())
         dt = timeutils.parse_isotime(dts)
         self.assertEqual(dt, utils.datetime_or_str_or_none(dt))
         self.assertIsNone(utils.datetime_or_str_or_none(None))
@@ -142,16 +141,16 @@ class TestUtils(test_base.TestCase):
 
         obj = Obj()
         obj.bar = timeutils.parse_isotime('1955-11-05T00:00:00Z')
-        self.assertEqual('1955-11-05T00:00:00Z', obj.foo())
+        self.assertEqual('1955-11-05T00:00:00+00:00', obj.foo())
         obj.bar = None
         self.assertIsNone(obj.foo())
         obj.bar = 'foo'
-        self.assertRaises(AttributeError, obj.foo)
+        self.assertRaises(TypeError, obj.foo)
 
     def test_dt_deserializer(self):
         dt = timeutils.parse_isotime('1955-11-05T00:00:00Z')
-        self.assertEqual(dt,
-                         utils.dt_deserializer(None, timeutils.isotime(dt)))
+        self.assertEqual(dt, utils.dt_deserializer(None,
+                         datetime.datetime.isoformat(dt)))
         self.assertIsNone(utils.dt_deserializer(None, None))
         self.assertRaises(ValueError, utils.dt_deserializer, None, 'foo')
 
@@ -226,7 +225,7 @@ class _TestObject(object):
         except NotImplementedError as ex:
             raised = True
         self.assertTrue(raised)
-        self.assertTrue('foobar' in str(ex))
+        self.assertIn('foobar', str(ex))
 
     def test_loaded_in_primitive(self):
         obj = MyObj(self.context)
@@ -246,7 +245,7 @@ class _TestObject(object):
         obj.foo = 123
         self.assertEqual(set(['foo']), obj.obj_what_changed())
         primitive = obj.obj_to_primitive()
-        self.assertTrue('magnum_object.changes' in primitive)
+        self.assertIn('magnum_object.changes', primitive)
         obj2 = MyObj.obj_from_primitive(primitive)
         self.assertEqual(set(['foo']), obj2.obj_what_changed())
         obj2.obj_reset_changes()
@@ -334,8 +333,8 @@ class _TestObject(object):
                     'magnum_object.changes':
                         ['created_at', 'updated_at'],
                     'magnum_object.data':
-                        {'created_at': timeutils.isotime(dt),
-                         'updated_at': timeutils.isotime(dt)}
+                        {'created_at': datetime.datetime.isoformat(dt),
+                         'updated_at': datetime.datetime.isoformat(dt)}
                     }
         actual = obj.obj_to_primitive()
         # magnum_object.changes is built from a set and order is undefined
@@ -346,10 +345,10 @@ class _TestObject(object):
 
     def test_contains(self):
         obj = MyObj(self.context)
-        self.assertFalse('foo' in obj)
+        self.assertNotIn('foo', obj)
         obj.foo = 1
-        self.assertTrue('foo' in obj)
-        self.assertFalse('does_not_exist' in obj)
+        self.assertIn('foo', obj)
+        self.assertNotIn('does_not_exist', obj)
 
     def test_obj_attr_is_set(self):
         obj = MyObj(self.context, foo=1)
@@ -426,13 +425,13 @@ class _TestObject(object):
 object_data = {
     'Bay': '1.0-35edde13ad178e9419e7ea8b6d580bcd',
     'BayLock': '1.0-7d1eb08cf2070523bd210369c7a2e076',
-    'BayModel': '1.7-3ceb83f91310437d21f465ce522fc4e7',
+    'BayModel': '1.8-a4bb0976be245f06edbd1db087a18071',
     'Certificate': '1.0-2aff667971b85c1edf8d15684fd7d5e2',
     'Container': '1.1-968c62bc65ee08027a2cdbba95f5819c',
     'MyObj': '1.0-b43567e512438205e32f4e95ca616697',
     'Node': '1.0-30943e6e3387a2fae7490b57c4239a17',
     'Pod': '1.1-7a31c372f163742845c10a008f47cc15',
-    'ReplicationController': '1.0-782b7deb9307b2807101541b7e58b8a2',
+    'ReplicationController': '1.0-a471c2429c212ed91833cfcf0f934eab',
     'Service': '1.0-a8cf7e95fced904419164dbcb6d32b38',
     'X509KeyPair': '1.1-4aecc268e23e32b8a762d43ba1a4b159',
     'MagnumService': '1.0-2d397ec59b0046bd5ec35cd3e06efeca',
@@ -463,7 +462,7 @@ class TestObjectSerializer(test_base.TestCase):
         ser = base.MagnumObjectSerializer()
         obj = MyObj(self.context)
         primitive = ser.serialize_entity(self.context, obj)
-        self.assertTrue('magnum_object.name' in primitive)
+        self.assertIn('magnum_object.name', primitive)
         obj2 = ser.deserialize_entity(self.context, primitive)
         self.assertIsInstance(obj2, MyObj)
         self.assertEqual(self.context, obj2._context)

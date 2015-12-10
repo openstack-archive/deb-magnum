@@ -72,7 +72,7 @@ def is_docker_library_version_atleast(version):
 def docker_for_container(context, container):
     if magnum_utils.is_uuid_like(container):
         container = objects.Container.get_by_uuid(context, container)
-    bay = conductor_utils.retrieve_bay(context, container)
+    bay = conductor_utils.retrieve_bay(context, container.bay_uuid)
     with docker_for_bay(context, bay) as docker:
         yield docker
 
@@ -81,12 +81,9 @@ def docker_for_container(context, container):
 def docker_for_bay(context, bay):
     baymodel = conductor_utils.retrieve_baymodel(context, bay)
 
-    tcp_url = 'tcp://%s:2376' % bay.api_address
-
     ca_cert, magnum_key, magnum_cert = None, None, None
     client_kwargs = dict()
     if not baymodel.tls_disabled:
-        tcp_url = 'https://%s:2376' % bay.api_address
         (ca_cert, magnum_key,
          magnum_cert) = cert_manager.create_client_files(bay)
         client_kwargs['ca_cert'] = ca_cert.name
@@ -94,7 +91,7 @@ def docker_for_bay(context, bay):
         client_kwargs['client_cert'] = magnum_cert.name
 
     yield docker_client.DockerHTTPClient(
-        tcp_url,
+        bay.api_address,
         CONF.docker.docker_remote_api_version,
         CONF.docker.default_timeout,
         **client_kwargs

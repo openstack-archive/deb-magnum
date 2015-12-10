@@ -272,7 +272,7 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(200, response.status_code)
 
         response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
-        self.assertEqual(True, response['public'])
+        self.assertTrue(response['public'])
 
     @mock.patch.object(magnum_policy, 'enforce')
     def test_update_public_baymodel_fail(self, mock_policy):
@@ -367,30 +367,6 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(400, response.status_code)
         self.assertTrue(response.json['error_message'])
 
-    def test_add_root(self):
-        name = 'bay_model_example_B'
-        response = self.patch_json(
-            '/baymodels/%s' % self.baymodel.uuid,
-            [{'path': '/name', 'value': name, 'op': 'add'}])
-        self.assertEqual('application/json', response.content_type)
-        self.assertEqual(200, response.status_int)
-
-        response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
-        self.assertEqual(name, response['name'])
-        # Assert nothing else was changed
-        self.assertEqual(self.baymodel.uuid, response['uuid'])
-        self.assertEqual(self.baymodel.image_id, response['image_id'])
-        self.assertEqual(self.baymodel.apiserver_port,
-                         response['apiserver_port'])
-        self.assertEqual(self.baymodel.network_driver,
-                         response['network_driver'])
-        self.assertEqual(self.baymodel.docker_volume_size,
-                         response['docker_volume_size'])
-        self.assertEqual(self.baymodel.coe,
-                         response['coe'])
-        self.assertEqual(self.baymodel.labels,
-                         response['labels'])
-
     def test_add_root_non_existent(self):
         response = self.patch_json(
             '/baymodels/%s' % self.baymodel.uuid,
@@ -399,49 +375,6 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
         self.assertTrue(response.json['error_message'])
-
-    def test_add_multi(self):
-        json = [
-            {
-                'path': '/name',
-                'value': 'bay_model_example_B',
-                'op': 'add'
-            },
-            {
-                'path': '/image_id',
-                'value': 'my-image',
-                'op': 'add'
-            }
-        ]
-        response = self.patch_json('/baymodels/%s' % self.baymodel.uuid, json)
-        self.assertEqual('application/json', response.content_type)
-        self.assertEqual(200, response.status_code)
-
-        response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
-        self.assertEqual('bay_model_example_B', response['name'])
-        self.assertEqual('my-image', response['image_id'])
-        # Assert nothing else was changed
-        self.assertEqual(self.baymodel.uuid, response['uuid'])
-        self.assertEqual(self.baymodel.apiserver_port,
-                         response['apiserver_port'])
-        self.assertEqual(self.baymodel.fixed_network,
-                         response['fixed_network'])
-        self.assertEqual(self.baymodel.network_driver,
-                         response['network_driver'])
-        self.assertEqual(self.baymodel.docker_volume_size,
-                         response['docker_volume_size'])
-        self.assertEqual(self.baymodel.ssh_authorized_key,
-                         response['ssh_authorized_key'])
-        self.assertEqual(self.baymodel.coe,
-                         response['coe'])
-        self.assertEqual(self.baymodel.http_proxy,
-                         response['http_proxy'])
-        self.assertEqual(self.baymodel.https_proxy,
-                         response['https_proxy'])
-        self.assertEqual(self.baymodel.no_proxy,
-                         response['no_proxy'])
-        self.assertEqual(self.baymodel.labels,
-                         response['labels'])
 
     def test_remove_uuid(self):
         response = self.patch_json('/baymodels/%s' % self.baymodel.uuid,
@@ -611,47 +544,70 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch.object(api_baymodel.BayModelsController, '_get_image_data')
     @mock.patch.object(api_baymodel.BayModelsController,
                        'check_keypair_exists')
-    def test_create_baymodel_with_network_driver(self, mock_keypair_exists,
-                                                 mock_image_data):
+    def _test_create_baymodel_network_driver_attr(self,
+                                                  baymodel_dict,
+                                                  baymodel_config_dict,
+                                                  expect_errors,
+                                                  mock_keypair_exists,
+                                                  mock_image_data):
         mock_keypair_exists.return_value = None
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
-            mock_keypair_exists.return_value = None
-            mock_image_data.return_value = {'name': 'mock_name',
-                                            'os_distro': 'fedora-atomic'}
-            bdict = apiutils.baymodel_post_data(coe='kubernetes',
-                                                network_driver='flannel')
-            response = self.post_json('/baymodels', bdict)
-            self.assertEqual(bdict['network_driver'],
-                             response.json['network_driver'])
-            cc_mock.assert_called_once_with(mock.ANY)
-            self.assertNotIn('id', cc_mock.call_args[0][0])
-
-    @mock.patch.object(api_baymodel.BayModelsController, '_get_image_data')
-    @mock.patch.object(api_baymodel.BayModelsController,
-                       'check_keypair_exists')
-    def test_create_baymodel_with_no_network_driver(self, mock_keypair_exists,
-                                                    mock_image_data):
-        mock_keypair_exists.return_value = None
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
-            mock_image_data.return_value = {'name': 'mock_name',
-                                            'os_distro': 'fedora-atomic'}
-            bdict = apiutils.baymodel_post_data()
-            response = self.post_json('/baymodels', bdict)
-            self.assertEqual(bdict['network_driver'],
-                             response.json['network_driver'])
-            cc_mock.assert_called_once_with(mock.ANY)
-            self.assertNotIn('id', cc_mock.call_args[0][0])
-
         mock_image_data.return_value = {'name': 'mock_name',
                                         'os_distro': 'fedora-atomic'}
-        bdict = apiutils.baymodel_post_data()
-        del bdict['uuid']
-        response = self.post_json('/baymodels', bdict)
-        self.assertEqual(bdict['image_id'],
-                         response.json['image_id'])
-        self.assertTrue(utils.is_uuid_like(response.json['uuid']))
+        for k, v in baymodel_config_dict.items():
+                    cfg.CONF.set_override(k, v, 'baymodel')
+        with mock.patch.object(self.dbapi, 'create_baymodel',
+                               wraps=self.dbapi.create_baymodel) as cc_mock:
+            bdict = apiutils.baymodel_post_data(**baymodel_dict)
+            response = self.post_json('/baymodels', bdict,
+                                      expect_errors=expect_errors)
+            if expect_errors:
+                self.assertEqual(400, response.status_int)
+            else:
+                expected_driver = bdict.get('network_driver')
+                if not expected_driver:
+                    expected_driver = (
+                        cfg.CONF.baymodel.swarm_default_network_driver)
+                self.assertEqual(expected_driver,
+                                 response.json['network_driver'])
+                self.assertEqual(bdict['image_id'],
+                                 response.json['image_id'])
+                cc_mock.assert_called_once_with(mock.ANY)
+                self.assertNotIn('id', cc_mock.call_args[0][0])
+                self.assertTrue(utils.is_uuid_like(response.json['uuid']))
+
+    def test_create_baymodel_with_network_driver(self):
+        baymodel_dict = {'coe': 'kubernetes', 'network_driver': 'flannel'}
+        config_dict = {}    # Default config
+        expect_errors_flag = False
+        self._test_create_baymodel_network_driver_attr(baymodel_dict,
+                                                       config_dict,
+                                                       expect_errors_flag)
+
+    def test_create_baymodel_with_no_network_driver(self):
+        baymodel_dict = {}
+        config_dict = {}
+        expect_errors_flag = False
+        self._test_create_baymodel_network_driver_attr(baymodel_dict,
+                                                       config_dict,
+                                                       expect_errors_flag)
+
+    def test_create_baymodel_with_network_driver_non_def_config(self):
+        baymodel_dict = {'coe': 'kubernetes', 'network_driver': 'flannel'}
+        config_dict = {
+            'kubernetes_allowed_network_drivers': ['flannel', 'foo']}
+        expect_errors_flag = False
+        self._test_create_baymodel_network_driver_attr(baymodel_dict,
+                                                       config_dict,
+                                                       expect_errors_flag)
+
+    def test_create_baymodel_with_invalid_network_driver(self):
+        baymodel_dict = {'coe': 'kubernetes', 'network_driver': 'bad_driver'}
+        config_dict = {
+            'kubernetes_allowed_network_drivers': ['flannel', 'good_driver']}
+        expect_errors_flag = True
+        self._test_create_baymodel_network_driver_attr(baymodel_dict,
+                                                       config_dict,
+                                                       expect_errors_flag)
 
     @mock.patch.object(api_baymodel.BayModelsController, '_get_image_data')
     @mock.patch.object(api_baymodel.BayModelsController,
@@ -668,7 +624,7 @@ class TestPost(api_base.FunctionalTest):
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.baymodel_post_data(public=True)
             response = self.post_json('/baymodels', bdict)
-            self.assertEqual(True, response.json['public'])
+            self.assertTrue(response.json['public'])
             mock_policy.assert_called_with(mock.ANY, "baymodel:publish",
                                            None, do_raise=False)
             cc_mock.assert_called_once_with(mock.ANY)
@@ -706,7 +662,7 @@ class TestPost(api_base.FunctionalTest):
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.baymodel_post_data(public=False)
             response = self.post_json('/baymodels', bdict)
-            self.assertEqual(False, response.json['public'])
+            self.assertFalse(response.json['public'])
             # policy enforcement is called only once for enforce_wsgi
             mock_policy.assert_called_once_with(mock.ANY, mock.ANY, None)
             cc_mock.assert_called_once_with(mock.ANY)

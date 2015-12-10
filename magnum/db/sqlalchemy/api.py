@@ -124,7 +124,7 @@ class Connection(api.Connection):
 
     def _add_bays_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         possible_filters = ["baymodel_id", "name", "node_count",
                             "master_count", "stack_id", "api_address",
@@ -286,7 +286,7 @@ class Connection(api.Connection):
 
     def _add_baymodels_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         possible_filters = ["name", "image_id", "flavor_id",
                             "master_flavor_id", "keypair_id",
@@ -400,11 +400,13 @@ class Connection(api.Connection):
 
     def _add_containers_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
-        for key in ['name', 'image', 'project_id', 'user_id', 'memory']:
-            if key in filters:
-                query = query.filter_by(**{key: filters[key]})
+        filter_names = ['name', 'image', 'project_id', 'user_id',
+                        'memory', 'bay_uuid']
+        for name in filter_names:
+            if name in filters:
+                query = query.filter_by(**{name: filters[name]})
 
         return query
 
@@ -495,7 +497,7 @@ class Connection(api.Connection):
 
     def _add_nodes_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         if 'associated' in filters:
             if filters['associated']:
@@ -599,7 +601,7 @@ class Connection(api.Connection):
 
     def _add_pods_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         if 'bay_uuid' in filters:
             query = query.filter_by(bay_uuid=filters['bay_uuid'])
@@ -694,7 +696,7 @@ class Connection(api.Connection):
 
     def _add_services_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         if 'bay_uuid' in filters:
             query = query.filter_by(bay_uuid=filters['bay_uuid'])
@@ -793,7 +795,7 @@ class Connection(api.Connection):
 
     def _add_rcs_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         if 'bay_uuid' in filters:
             query = query.filter_by(bay_uuid=filters['bay_uuid'])
@@ -964,7 +966,7 @@ class Connection(api.Connection):
 
     def _add_x509keypairs_filters(self, query, filters):
         if filters is None:
-            filters = []
+            filters = {}
 
         if 'bay_uuid' in filters:
             query = query.filter_by(bay_uuid=filters['bay_uuid'])

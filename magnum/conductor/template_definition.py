@@ -31,17 +31,18 @@ LOG = logging.getLogger(__name__)
 
 KUBE_SECURE_PORT = '6443'
 KUBE_INSECURE_PORT = '8080'
+DOCKER_PORT = '2376'
 
 template_def_opts = [
     cfg.StrOpt('k8s_atomic_template_path',
-               default=paths.basedir_def('templates/heat-kubernetes/'
+               default=paths.basedir_def('templates/kubernetes/'
                                          'kubecluster.yaml'),
                deprecated_name='template_path',
                deprecated_group='bay_heat',
                help=_(
                    'Location of template to build a k8s cluster on atomic.')),
     cfg.StrOpt('k8s_coreos_template_path',
-               default=paths.basedir_def('templates/heat-kubernetes/'
+               default=paths.basedir_def('templates/kubernetes/'
                                          'kubecluster-coreos.yaml'),
                help=_(
                    'Location of template to build a k8s cluster on CoreOS.')),
@@ -49,29 +50,16 @@ template_def_opts = [
                default='https://discovery.etcd.io/new?size=%(size)d',
                help=_('Url for etcd public discovery endpoint.')),
     cfg.StrOpt('coreos_discovery_token_url',
-               default=None,
                deprecated_name='discovery_token_url',
                deprecated_group='bay_heat',
                help=_('coreos discovery token url.')),
     cfg.StrOpt('swarm_atomic_template_path',
-               default=paths.basedir_def('templates/docker-swarm/'
+               default=paths.basedir_def('templates/swarm/'
                                          'swarm.yaml'),
                help=_('Location of template to build a swarm '
                       'cluster on atomic.')),
-    cfg.StrOpt('swarm_discovery_url_format',
-               default=None,
-               help=_('Format string to use for swarm discovery url. '
-                      'Available values: bay_id, bay_uuid. '
-                      'Example: "etcd://etcd.example.com/\%(bay_uuid)s"')),
-    cfg.BoolOpt('public_swarm_discovery',
-                default=True,
-                help=_('Indicates Swarm discovery should use public '
-                       'endpoint.')),
-    cfg.StrOpt('public_swarm_discovery_url',
-               default='https://discovery.hub.docker.com/v1/clusters',
-               help=_('Url for swarm public discovery endpoint.')),
     cfg.StrOpt('mesos_ubuntu_template_path',
-               default=paths.basedir_def('templates/heat-mesos/'
+               default=paths.basedir_def('templates/mesos/'
                                          'mesoscluster.yaml'),
                help=_('Location of template to build a Mesos cluster '
                       'on Ubuntu.')),
@@ -401,6 +389,25 @@ class K8sApiAddressOutputMapping(OutputMapping):
             setattr(bay, self.bay_attr, output_value)
 
 
+class SwarmApiAddressOutputMapping(OutputMapping):
+
+    def set_output(self, stack, baymodel, bay):
+        protocol = 'https'
+        if baymodel.tls_disabled:
+            protocol = 'tcp'
+
+        output_value = self.get_output_value(stack)
+        params = {
+            'protocol': protocol,
+            'address': output_value,
+            'port': DOCKER_PORT,
+        }
+        output_value = "%(protocol)s://%(address)s:%(port)s" % params
+
+        if output_value is not None:
+            setattr(bay, self.bay_attr, output_value)
+
+
 class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
     """Kubernetes template for a Fedora Atomic VM."""
 
@@ -439,10 +446,14 @@ class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
         self.add_output('api_address',
                         bay_attr='api_address',
                         mapping_type=K8sApiAddressOutputMapping)
-        self.add_output('kube_minions',
+        self.add_output('kube_minions_private',
                         bay_attr=None)
-        self.add_output('kube_minions_external',
+        self.add_output('kube_minions',
                         bay_attr='node_addresses')
+        self.add_output('kube_masters_private',
+                        bay_attr=None)
+        self.add_output('kube_masters',
+                        bay_attr='master_addresses')
 
     def get_discovery_url(self, bay):
         if hasattr(bay, 'discovery_url') and bay.discovery_url:
@@ -549,37 +560,44 @@ class AtomicSwarmTemplateDefinition(BaseTemplateDefinition):
                            param_type=str)
         self.add_parameter('server_flavor',
                            baymodel_attr='flavor_id')
+        self.add_parameter('docker_volume_size',
+                           baymodel_attr='docker_volume_size')
         self.add_parameter('external_network',
                            baymodel_attr='external_network_id',
                            required=True)
+        self.add_parameter('network_driver',
+                           baymodel_attr='network_driver')
         self.add_parameter('tls_disabled',
                            baymodel_attr='tls_disabled',
                            required=True)
+        self.add_output('api_address',
+                        bay_attr='api_address',
+                        mapping_type=SwarmApiAddressOutputMapping)
+        self.add_output('swarm_master_private',
+                        bay_attr=None)
         self.add_output('swarm_master',
-                        bay_attr='api_address')
-        self.add_output('swarm_nodes_external',
+                        bay_attr=None)
+        self.add_output('swarm_nodes_private',
+                        bay_attr=None)
+        self.add_output('swarm_nodes',
                         bay_attr='node_addresses')
         self.add_output('discovery_url',
                         bay_attr='discovery_url')
 
-    @staticmethod
-    def get_public_token():
-        token_id = requests.post(cfg.CONF.bay.public_swarm_discovery_url).text
-        return 'token://%s' % token_id
-
-    @staticmethod
-    def parse_discovery_url(bay):
-        strings = dict(bay_id=bay.id, bay_uuid=bay.uuid)
-        return cfg.CONF.bay.swarm_discovery_url_format % strings
-
     def get_discovery_url(self, bay):
         if hasattr(bay, 'discovery_url') and bay.discovery_url:
             discovery_url = bay.discovery_url
-        elif cfg.CONF.bay.public_swarm_discovery:
-            discovery_url = self.get_public_token()
         else:
-            discovery_url = self.parse_discovery_url(bay)
-
+            discovery_endpoint = (
+                cfg.CONF.bay.etcd_discovery_service_endpoint_format %
+                {'size': 1})
+            discovery_url = requests.get(discovery_endpoint).text
+            if not discovery_url:
+                raise exception.InvalidDiscoveryURL(
+                    discovery_url=discovery_url,
+                    discovery_endpoint=discovery_endpoint)
+            else:
+                bay.discovery_url = discovery_url
         return discovery_url
 
     def get_params(self, context, baymodel, bay, **kwargs):
@@ -591,6 +609,12 @@ class AtomicSwarmTemplateDefinition(BaseTemplateDefinition):
         osc = clients.OpenStackClients(context)
         extra_params['user_token'] = self._get_user_token(context, osc, bay)
         extra_params['magnum_url'] = osc.magnum_url()
+
+        label_list = ['flannel_network_cidr', 'flannel_use_vxlan',
+                      'flannel_network_subnetlen']
+
+        for label in label_list:
+            extra_params[label] = baymodel.labels.get(label)
 
         return super(AtomicSwarmTemplateDefinition,
                      self).get_params(context, baymodel, bay,
@@ -622,8 +646,14 @@ class UbuntuMesosTemplateDefinition(BaseTemplateDefinition):
         self.add_parameter('slave_flavor',
                            baymodel_attr='flavor_id')
 
-        self.add_output('mesos_master',
+        self.add_output('api_address',
                         bay_attr='api_address')
+        self.add_output('mesos_master_private',
+                        bay_attr=None)
+        self.add_output('mesos_master',
+                        bay_attr='master_addresses')
+        self.add_output('mesos_slaves_private',
+                        bay_attr=None)
         self.add_output('mesos_slaves',
                         bay_attr='node_addresses')
 

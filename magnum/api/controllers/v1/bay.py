@@ -13,8 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import datetime
-
+from oslo_utils import timeutils
 import pecan
 from pecan import rest
 import wsme
@@ -105,7 +104,10 @@ class Bay(base.APIBase):
     """Api address of cluster master node"""
 
     node_addresses = wsme.wsattr([wtypes.text], readonly=True)
-    """Ip addresses of cluster slave nodes"""
+    """IP addresses of cluster slave nodes"""
+
+    master_addresses = wsme.wsattr([wtypes.text], readonly=True)
+    """IP addresses of cluster master nodes"""
 
     def __init__(self, **kwargs):
         super(Bay, self).__init__()
@@ -149,8 +151,8 @@ class Bay(base.APIBase):
                      status_reason="CREATE completed successfully",
                      api_address='172.24.4.3',
                      node_addresses=['172.24.4.4', '172.24.4.5'],
-                     created_at=datetime.datetime.utcnow(),
-                     updated_at=datetime.datetime.utcnow())
+                     created_at=timeutils.utcnow(),
+                     updated_at=timeutils.utcnow())
         return cls._convert_with_links(sample, 'http://localhost:9511', expand)
 
 
@@ -211,10 +213,10 @@ class BaysController(rest.RestController):
                                                 sort_dir=sort_dir)
 
     @policy.enforce_wsgi("bay")
-    @expose.expose(BayCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text)
-    def get_all(self, bay_uuid=None, marker=None, limit=None,
-                sort_key='id', sort_dir='asc'):
+    @expose.expose(BayCollection, types.uuid, int, wtypes.text,
+                   wtypes.text)
+    def get_all(self, marker=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of bays.
 
         :param marker: pagination marker for large data sets.
@@ -226,13 +228,12 @@ class BaysController(rest.RestController):
                                          sort_dir)
 
     @policy.enforce_wsgi("bay")
-    @expose.expose(BayCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text)
-    def detail(self, bay_uuid=None, marker=None, limit=None,
-               sort_key='id', sort_dir='asc'):
+    @expose.expose(BayCollection, types.uuid, int, wtypes.text,
+                   wtypes.text)
+    def detail(self, marker=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of bays with detail.
 
-        :param bay_uuid: UUID of a bay, to get only bays for that bay.
         :param marker: pagination marker for large data sets.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.

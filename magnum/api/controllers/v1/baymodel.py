@@ -12,10 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import datetime
-
 import glanceclient.exc
 import novaclient.exceptions as nova_exc
+from oslo_utils import timeutils
 import pecan
 from pecan import rest
 import wsme
@@ -128,6 +127,11 @@ class BayModel(base.APIBase):
     public = wsme.wsattr(types.boolean, default=False)
     """Indicates whether the baymodel is public or not."""
 
+    server_type = wsme.wsattr(wtypes.StringType(min_length=1,
+                                                max_length=255),
+                              default='vm')
+    """Server type for this bay model """
+
     def __init__(self, **kwargs):
         self.fields = []
         for field in objects.BayModel.fields:
@@ -178,8 +182,9 @@ class BayModel(base.APIBase):
             https_proxy='https://proxy.com:123',
             no_proxy='192.168.0.1,192.168.0.2,192.168.0.3',
             labels={'key1': 'val1', 'key2': 'val2'},
-            created_at=datetime.datetime.utcnow(),
-            updated_at=datetime.datetime.utcnow(),
+            server_type='vm',
+            created_at=timeutils.utcnow(),
+            updated_at=timeutils.utcnow(),
             public=False),
         return cls._convert_with_links(sample, 'http://localhost:9511', expand)
 
@@ -214,16 +219,6 @@ class BayModelsController(rest.RestController):
 
     _custom_actions = {
         'detail': ['GET'],
-    }
-
-    # Allowed network driver types per COE. An entry of None in this
-    # dictionary allows the user to leave out the selection of
-    # network-driver, in which case the default network driver for
-    # the chosen COE will be used.
-    _allowed_network_driver_types = {
-        'kubernetes': ['flannel', None],
-        'swarm': [None],
-        'mesos': [None],
     }
 
     def _get_baymodels_collection(self, marker, limit,
@@ -263,10 +258,10 @@ class BayModelsController(rest.RestController):
             raise exception.ImageNotAuthorized(image_id=image_ident)
 
     @policy.enforce_wsgi("baymodel")
-    @expose.expose(BayModelCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text)
-    def get_all(self, baymodel_uuid=None, marker=None, limit=None,
-                sort_key='id', sort_dir='asc'):
+    @expose.expose(BayModelCollection, types.uuid, int, wtypes.text,
+                   wtypes.text)
+    def get_all(self, marker=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of baymodels.
 
         :param marker: pagination marker for large data sets.
@@ -278,14 +273,12 @@ class BayModelsController(rest.RestController):
                                               sort_dir)
 
     @policy.enforce_wsgi("baymodel")
-    @expose.expose(BayModelCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text)
-    def detail(self, baymodel_uuid=None, marker=None, limit=None,
-               sort_key='id', sort_dir='asc'):
+    @expose.expose(BayModelCollection, types.uuid, int, wtypes.text,
+                   wtypes.text)
+    def detail(self, marker=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of baymodels with detail.
 
-        :param baymodel_uuid: UUID of a baymodel, to get only baymodels for
-               that baymodel.
         :param marker: pagination marker for large data sets.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.
@@ -322,7 +315,7 @@ class BayModelsController(rest.RestController):
 
     @policy.enforce_wsgi("baymodel", "create")
     @expose.expose(BayModel, body=BayModel, status_code=201)
-    @validation.enforce_network_driver_types(_allowed_network_driver_types)
+    @validation.enforce_network_driver_types_create()
     def post(self, baymodel):
         """Create a new baymodel.
 
@@ -353,17 +346,17 @@ class BayModelsController(rest.RestController):
         return BayModel.convert_with_links(new_baymodel)
 
     @policy.enforce_wsgi("baymodel", "update")
-    @wsme.validate(types.uuid, [BayModelPatchType])
-    @expose.expose(BayModel, types.uuid, body=[BayModelPatchType])
-    @validation.enforce_network_driver_types(_allowed_network_driver_types)
-    def patch(self, baymodel_uuid, patch):
+    @wsme.validate(types.uuid_or_name, [BayModelPatchType])
+    @expose.expose(BayModel, types.uuid_or_name, body=[BayModelPatchType])
+    @validation.enforce_network_driver_types_update()
+    def patch(self, baymodel_ident, patch):
         """Update an existing baymodel.
 
-        :param baymodel_uuid: UUID of a baymodel.
+        :param baymodel_ident: UUID or logic name of a baymodel.
         :param patch: a json PATCH document to apply to this baymodel.
         """
         context = pecan.request.context
-        rpc_baymodel = objects.BayModel.get_by_uuid(context, baymodel_uuid)
+        rpc_baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
         try:
             baymodel_dict = rpc_baymodel.as_dict()
             baymodel = BayModel(**api_utils.apply_jsonpatch(
@@ -398,7 +391,7 @@ class BayModelsController(rest.RestController):
     def delete(self, baymodel_ident):
         """Delete a baymodel.
 
-        :param baymodel_uuid: UUID or logical name of a baymodel.
+        :param baymodel_ident: UUID or logical name of a baymodel.
         """
         rpc_baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
         rpc_baymodel.destroy()

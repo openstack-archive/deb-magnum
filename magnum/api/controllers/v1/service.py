@@ -10,8 +10,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import datetime
-
+from oslo_utils import timeutils
 import pecan
 from pecan import rest
 import wsme
@@ -121,8 +120,8 @@ class Service(v1_base.K8sResourceBase):
                              }
                          }
                          }''',
-                     created_at=datetime.datetime.utcnow(),
-                     updated_at=datetime.datetime.utcnow())
+                     created_at=timeutils.utcnow(),
+                     updated_at=timeutils.utcnow())
         return cls._convert_with_links(sample, 'http://localhost:9511', expand)
 
     def parse_manifest(self):
@@ -184,7 +183,7 @@ class ServicesController(rest.RestController):
 
     def _get_services_collection(self, marker, limit,
                                  sort_key, sort_dir,
-                                 bay_uuid, expand=False,
+                                 bay_ident, expand=False,
                                  resource_url=None):
 
         limit = api_utils.validate_limit(limit)
@@ -208,38 +207,33 @@ class ServicesController(rest.RestController):
                                                     sort_dir=sort_dir)
 
     @policy.enforce_wsgi("service")
-    @expose.expose(ServiceCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text,
-                   types.uuid)
-    def get_all(self, service_uuid=None, marker=None, limit=None,
-                sort_key='id', sort_dir='asc', bay_uuid=None):
+    @expose.expose(ServiceCollection, types.uuid, int, wtypes.text,
+                   wtypes.text, types.uuid_or_name)
+    def get_all(self, marker=None, limit=None, sort_key='id',
+                sort_dir='asc', bay_ident=None):
         """Retrieve a list of services.
 
         :param marker: pagination marker for large data sets.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
-        :param bay_uuid: UUID of the Bay.
+        :param bay_ident: UUID or logical name of the Bay.
         """
         return self._get_services_collection(marker, limit, sort_key,
-                                             sort_dir, bay_uuid)
+                                             sort_dir, bay_ident)
 
     @policy.enforce_wsgi("service")
-    @expose.expose(ServiceCollection, types.uuid,
-                   types.uuid, int, wtypes.text, wtypes.text,
-                   types.uuid)
-    def detail(self, service_uuid=None, marker=None, limit=None,
-               sort_key='id', sort_dir='asc',
-               bay_uuid=None):
+    @expose.expose(ServiceCollection, types.uuid, int, wtypes.text,
+                   wtypes.text, types.uuid_or_name)
+    def detail(self, marker=None, limit=None, sort_key='id',
+               sort_dir='asc', bay_ident=None):
         """Retrieve a list of services with detail.
 
-        :param service_uuid: UUID of a service, to get only
-               services for that service.
         :param marker: pagination marker for large data sets.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
-        :param bay_uuid: UUID of the Bay.
+        :param bay_ident: UUID or logical name of the Bay.
         """
         # NOTE(lucasagomes): /detail should only work agaist collections
         parent = pecan.request.path.split('/')[:-1][-1]
@@ -254,12 +248,12 @@ class ServicesController(rest.RestController):
 
     @policy.enforce_wsgi("service", "get")
     @expose.expose(Service, types.uuid_or_name,
-                   types.uuid)
-    def get_one(self, service_ident, bay_uuid):
+                   types.uuid_or_name)
+    def get_one(self, service_ident, bay_ident):
         """Retrieve information about the given service.
 
         :param service_ident: UUID or logical name of the service.
-        :param bay_uuid: UUID of the Bay.
+        :param bay_ident: UUID or logical name of the Bay.
         """
         rpc_service = api_utils.get_rpc_resource('Service', service_ident)
 
@@ -290,12 +284,12 @@ class ServicesController(rest.RestController):
     @policy.enforce_wsgi("service", "update")
     @wsme.validate(types.uuid, [ServicePatchType])
     @expose.expose(Service, types.uuid_or_name,
-                   types.uuid, body=[ServicePatchType])
-    def patch(self, service_ident, bay_uuid, patch):
+                   types.uuid_or_name, body=[ServicePatchType])
+    def patch(self, service_ident, bay_ident, patch):
         """Update an existing service.
 
         :param service_ident: UUID or logical name of a service.
-        :param bay_uuid: UUID of the Bay.
+        :param bay_ident: UUID or logical name of the Bay.
         :param patch: a json PATCH document to apply to this service.
         """
         rpc_service = api_utils.get_rpc_resource('Service', service_ident)
@@ -331,12 +325,12 @@ class ServicesController(rest.RestController):
 
     @policy.enforce_wsgi("service")
     @expose.expose(None, types.uuid_or_name,
-                   types.uuid, status_code=204)
-    def delete(self, service_ident, bay_uuid):
+                   types.uuid_or_name, status_code=204)
+    def delete(self, service_ident, bay_ident):
         """Delete a service.
 
         :param service_ident: UUID or logical name of a service.
-        :param bay_uuid: UUID of the Bay.
+        :param bay_ident: UUID or logical name of the Bay.
         """
         rpc_service = api_utils.get_rpc_resource('Service', service_ident)
 

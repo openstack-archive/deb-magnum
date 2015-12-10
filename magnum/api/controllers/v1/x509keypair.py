@@ -12,8 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import datetime
-
+from oslo_utils import timeutils
 import pecan
 from pecan import rest
 import wsme
@@ -121,7 +120,7 @@ class X509KeyPair(base.APIBase):
         sample = cls(uuid='f978db47-9a37-4e9f-8572-804a10abc0aa',
                      name='MyX509KeyPair',
                      bay_uuid='7ae81bb3-dec3-4289-8d6c-da80bd8001ae',
-                     created_at=datetime.datetime.utcnow(),
+                     created_at=timeutils.utcnow(),
                      ca_cert='AAA....AAA',
                      certificate='BBB....BBB',
                      private_key='CCC....CCC')
@@ -186,10 +185,10 @@ class X509KeyPairController(rest.RestController):
                                                         sort_key=sort_key,
                                                         sort_dir=sort_dir)
 
-    @wsme_pecan.wsexpose(X509KeyPairCollection, types.uuid,
-                         types.uuid, int, wtypes.text, wtypes.text)
-    def get_all(self, x509keypair_uuid=None, marker=None, limit=None,
-                sort_key='id', sort_dir='asc'):
+    @wsme_pecan.wsexpose(X509KeyPairCollection, types.uuid, int,
+                         wtypes.text, wtypes.text)
+    def get_all(self, marker=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of x509keypairs.
 
         :param marker: pagination marker for large data sets.
@@ -200,14 +199,12 @@ class X509KeyPairController(rest.RestController):
         return self._get_x509keypairs_collection(marker, limit, sort_key,
                                                  sort_dir)
 
-    @wsme_pecan.wsexpose(X509KeyPairCollection, types.uuid,
-                         types.uuid, int, wtypes.text, wtypes.text)
-    def detail(self, x509keypair_uuid=None, marker=None, limit=None,
-               sort_key='id', sort_dir='asc'):
+    @wsme_pecan.wsexpose(X509KeyPairCollection, types.uuid, int,
+                         wtypes.text, wtypes.text)
+    def detail(self, marker=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of x509keypairs with detail.
 
-        :param x509keypair_uuid: UUID of a x509keypair, to get onlyi
-                                 x509keypairs for that x509keypair.
         :param marker: pagination marker for large data sets.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.

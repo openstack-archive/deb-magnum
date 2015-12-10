@@ -65,7 +65,7 @@ class TestListBay(api_base.FunctionalTest):
         self.assertEqual(bay.uuid, response['uuid'])
         for key in ("name", "baymodel_id", "node_count", "status",
                     "api_address", "discovery_url", "node_addresses",
-                    "master_count"):
+                    "master_count", "master_addresses"):
             self.assertIn(key, response)
 
     def test_get_one_by_name(self):
@@ -74,7 +74,7 @@ class TestListBay(api_base.FunctionalTest):
         self.assertEqual(bay.uuid, response['uuid'])
         for key in ("name", "baymodel_id", "node_count", "status",
                     "api_address", "discovery_url", "node_addresses",
-                    "master_count"):
+                    "master_count", "master_addresses"):
             self.assertIn(key, response)
 
     def test_get_one_by_name_not_found(self):
@@ -127,7 +127,8 @@ class TestListBay(api_base.FunctionalTest):
         self.assertEqual(1, len(response['bays']))
         self.assertEqual(bay_list[-1].uuid, response['bays'][0]['uuid'])
         for key in ("name", "baymodel_id", "node_count", "status",
-                    "discovery_url", "api_address", "node_addresses"):
+                    "discovery_url", "api_address", "node_addresses",
+                    "master_addresses"):
             self.assertIn(key, response['bays'][0])
 
     def test_detail_against_single(self):
@@ -310,45 +311,6 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(404, response.status_int)
         self.assertEqual('application/json', response.content_type)
         self.assertTrue(response.json['error_message'])
-
-    def test_add_ok(self):
-        name = 'bay_example_B'
-        response = self.patch_json(
-            '/bays/%s' % self.bay.uuid,
-            [{'path': '/name', 'value': name, 'op': 'add'}])
-        self.assertEqual('application/json', response.content_type)
-        self.assertEqual(200, response.status_int)
-
-        response = self.get_json('/bays/%s' % self.bay.uuid)
-        self.assertEqual(name, response['name'])
-        # Assert nothing else was changed
-        self.assertEqual(self.bay.uuid, response['uuid'])
-        self.assertEqual(self.bay.baymodel_id, response['baymodel_id'])
-        self.assertEqual(self.bay.node_count, response['node_count'])
-
-    def test_add_multi(self):
-        json = [
-            {
-                'path': '/name',
-                'value': 'bay_example_B',
-                'op': 'add'
-            },
-            {
-                'path': '/node_count',
-                'value': 33,
-                'op': 'add'
-            }
-        ]
-        response = self.patch_json('/bays/%s' % self.bay.uuid, json)
-        self.assertEqual('application/json', response.content_type)
-        self.assertEqual(200, response.status_code)
-
-        response = self.get_json('/bays/%s' % self.bay.uuid)
-        self.assertEqual('bay_example_B', response['name'])
-        self.assertEqual(33, response['node_count'])
-        # Assert nothing else was changed
-        self.assertEqual(self.bay.uuid, response['uuid'])
-        self.assertEqual(self.bay.baymodel_id, response['baymodel_id'])
 
     def test_add_non_existent_property(self):
         response = self.patch_json(
