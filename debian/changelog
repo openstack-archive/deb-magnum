@@ -3,6 +3,8 @@ magnum (1.1.0-1) experimental; urgency=medium
   * New upstream release.
   * Updated nl.po debconf translation (Closes: #812355).
   * Updated fr.po debconf translation (Closes: #807767).
+  * Added a watch file.
+  * Fixed debian/copyright.
 
  -- Thomas Goirand <zigo@debian.org>  Wed, 03 Feb 2016 16:33:13 +0800
 
