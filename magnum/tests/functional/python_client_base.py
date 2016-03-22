@@ -17,22 +17,22 @@ test_magnum
 Tests for `magnum` module.
 """
 
-import ConfigParser
 import os
 import subprocess
 import tempfile
 import time
 
 import fixtures
+from six.moves import configparser
 
 from magnum.common.utils import rmtree_without_raise
-from magnum.tests import base
-from magnumclient.openstack.common.apiclient import exceptions
-from magnumclient.openstack.common import cliutils
+from magnum.tests.functional.common import base
+from magnumclient.common.apiclient import exceptions
+from magnumclient.common import cliutils
 from magnumclient.v1 import client as v1client
 
 
-class BaseMagnumClient(base.TestCase):
+class BaseMagnumClient(base.BaseMagnumTest):
 
     @classmethod
     def setUpClass(cls):
@@ -40,6 +40,7 @@ class BaseMagnumClient(base.TestCase):
         #
         # Support the existence of a functional_creds.conf for
         # testing. This makes it possible to use a config file.
+        super(BaseMagnumClient, cls).setUpClass()
         user = cliutils.env('OS_USERNAME')
         passwd = cliutils.env('OS_PASSWORD')
         tenant = cliutils.env('OS_TENANT_NAME')
@@ -50,9 +51,11 @@ class BaseMagnumClient(base.TestCase):
         image_id = cliutils.env('IMAGE_ID')
         nic_id = cliutils.env('NIC_ID')
         flavor_id = cliutils.env('FLAVOR_ID')
+        master_flavor_id = cliutils.env('MASTER_FLAVOR_ID')
         keypair_id = cliutils.env('KEYPAIR_ID')
+        copy_logs = cliutils.env('COPY_LOGS')
 
-        config = ConfigParser.RawConfigParser()
+        config = configparser.RawConfigParser()
         if config.read('functional_creds.conf'):
             # the OR pattern means the environment is preferred for
             # override
@@ -64,12 +67,20 @@ class BaseMagnumClient(base.TestCase):
             image_id = image_id or config.get('magnum', 'image_id')
             nic_id = nic_id or config.get('magnum', 'nic_id')
             flavor_id = flavor_id or config.get('magnum', 'flavor_id')
+            master_flavor_id = master_flavor_id or config.get(
+                'magnum', 'master_flavor_id')
             keypair_id = keypair_id or config.get('magnum', 'keypair_id')
+            try:
+                copy_logs = copy_logs or config.get('magnum', 'copy_logs')
+            except configparser.NoOptionError:
+                pass
 
         cls.image_id = image_id
         cls.nic_id = nic_id
         cls.flavor_id = flavor_id
+        cls.master_flavor_id = master_flavor_id
         cls.keypair_id = keypair_id
+        cls.copy_logs = bool(copy_logs)
         cls.cs = v1client.Client(username=user,
                                  api_key=passwd,
                                  project_id=tenant_id,
@@ -100,8 +111,9 @@ class BaseMagnumClient(base.TestCase):
         #                just leave them here to make things work.
         #                Plan is to support other kinds of baymodel creation.
         coe = kwargs.pop('coe', 'kubernetes')
-        docker_volume_size = kwargs.pop('docker_volume_size', 1)
+        docker_volume_size = kwargs.pop('docker_volume_size', 3)
         network_driver = kwargs.pop('network_driver', 'flannel')
+        volume_driver = kwargs.pop('volume_driver', 'cinder')
         labels = kwargs.pop('labels', {"K1": "V1", "K2": "V2"})
         tls_disabled = kwargs.pop('tls_disabled', False)
 
@@ -111,8 +123,10 @@ class BaseMagnumClient(base.TestCase):
             external_network_id=cls.nic_id,
             image_id=cls.image_id,
             flavor_id=cls.flavor_id,
+            master_flavor_id=cls.master_flavor_id,
             docker_volume_size=docker_volume_size,
             network_driver=network_driver,
+            volume_driver=volume_driver,
             coe=coe,
             labels=labels,
             tls_disabled=tls_disabled,
@@ -120,18 +134,18 @@ class BaseMagnumClient(base.TestCase):
         return baymodel
 
     @classmethod
-    def _create_bay(cls, name, baymodel_uuid, wait=True):
+    def _create_bay(cls, name, baymodel_uuid):
         bay = cls.cs.bays.create(
             name=name,
             baymodel_id=baymodel_uuid,
             node_count=None,
         )
 
-        if wait:
-            cls._wait_on_status(bay,
-                                [None, "CREATE_IN_PROGRESS"],
-                                ["CREATE_FAILED",
-                                 "CREATE_COMPLETE"])
+        return bay
+
+    @classmethod
+    def _show_bay(cls, name):
+        bay = cls.cs.bays.get(name)
         return bay
 
     @classmethod
@@ -142,11 +156,66 @@ class BaseMagnumClient(base.TestCase):
     def _delete_bay(cls, bay_uuid):
         cls.cs.bays.delete(bay_uuid)
 
+        try:
+            cls._wait_on_status(cls.bay,
+                                ["CREATE_COMPLETE",
+                                 "DELETE_IN_PROGRESS", "CREATE_FAILED"],
+                                ["DELETE_FAILED", "DELETE_COMPLETE"])
+        except exceptions.NotFound:
+            pass
+        else:
+            if cls._show_bay(cls.bay.uuid).status == 'DELETE_FAILED':
+                raise Exception("bay %s delete failed" % cls.bay.uuid)
+
+    def _wait_for_bay_complete(self, bay):
+        self._wait_on_status(
+            bay,
+            [None, "CREATE_IN_PROGRESS"],
+            ["CREATE_FAILED", "CREATE_COMPLETE"])
+
+        if self.cs.bays.get(bay.uuid).status == 'CREATE_FAILED':
+            raise Exception("bay %s created failed" % bay.uuid)
+
+        return bay
+
 
 class BayTest(BaseMagnumClient):
 
     # NOTE (eliqiao) coe should be specified in subclasses
     coe = None
+    baymodel_kwargs = {}
+    config_contents = """[req]
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+prompt = no
+[req_distinguished_name]
+CN = Your Name
+[req_ext]
+extendedKeyUsage = clientAuth
+"""
+
+    ca_dir = None
+    bay = None
+    baymodel = None
+
+    @classmethod
+    def setUpClass(cls):
+        super(BayTest, cls).setUpClass()
+        cls.baymodel = cls._create_baymodel(
+            cls.__name__, coe=cls.coe, **cls.baymodel_kwargs)
+        cls.bay = cls._create_bay(cls.__name__, cls.baymodel.uuid)
+        if not cls.baymodel_kwargs.get('tls_disabled', False):
+            cls._create_tls_ca_files(cls.config_contents)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.ca_dir:
+            rmtree_without_raise(cls.ca_dir)
+        if cls.bay:
+            cls._delete_bay(cls.bay.uuid)
+        if cls.baymodel:
+            cls._delete_baymodel(cls.baymodel.uuid)
+        super(BayTest, cls).tearDownClass()
 
     def setUp(self):
         super(BayTest, self).setUp()
@@ -160,68 +229,13 @@ class BayTest(BaseMagnumClient):
         if test_timeout > 0:
             self.useFixture(fixtures.Timeout(test_timeout, gentle=True))
 
-    def _test_baymodel_create_and_delete(self, baymodel_name,
-                                         delete=True, **kwargs):
-        baymodel = self._create_baymodel(baymodel_name, coe=self.coe, **kwargs)
-        list = [item.uuid for item in self.cs.baymodels.list()]
-        self.assertIn(baymodel.uuid, list)
-
-        if not delete:
-            return baymodel
-        else:
-            self.cs.baymodels.delete(baymodel.uuid)
-            list = [item.uuid for item in self.cs.baymodels.list()]
-            self.assertNotIn(baymodel.uuid, list)
-
-    def _test_bay_create_and_delete(self, bay_name, baymodel):
-        # NOTE(eliqiao): baymodel will be deleted after this testing
-        bay = self._create_bay(bay_name, baymodel.uuid)
-        list = [item.uuid for item in self.cs.bays.list()]
-        self.assertIn(bay.uuid, list)
-
-        try:
-            self.assertIn(self.cs.bays.get(bay.uuid).status,
-                          ["CREATED", "CREATE_COMPLETE"])
-        finally:
-            # Ensure we delete whether the assert above is true or false
-            self.cs.bays.delete(bay.uuid)
-
-            try:
-                self._wait_on_status(bay,
-                                     ["CREATE_COMPLETE",
-                                      "DELETE_IN_PROGRESS", "CREATE_FAILED"],
-                                     ["DELETE_FAILED",
-                                      "DELETE_COMPLETE"])
-            except exceptions.NotFound:
-                # if bay/get fails, the bay has been deleted already
-                pass
-
-            try:
-                self.cs.baymodels.delete(baymodel.uuid)
-            except exceptions.BadRequest:
-                pass
-
-
-class BayAPITLSTest(BaseMagnumClient):
-    """Base class of TLS enabled test case."""
-
-    @classmethod
-    def tearDownClass(cls):
-
-        if cls.ca_dir:
-            rmtree_without_raise(cls.ca_dir)
-
-        cls._delete_bay(cls.bay.uuid)
-        try:
-            cls._wait_on_status(cls.bay,
-                                ["CREATE_COMPLETE",
-                                 "DELETE_IN_PROGRESS", "CREATE_FAILED"],
-                                ["DELETE_FAILED", "DELETE_COMPLETE"])
-        except exceptions.NotFound:
-            pass
-        cls._delete_baymodel(cls.baymodel.uuid)
-
-        super(BayAPITLSTest, cls).tearDownClass()
+        self.addOnException(
+            self.copy_logs_handler(
+                lambda: list(self.cs.bays.get(self.bay.uuid).node_addresses +
+                             self.cs.bays.get(self.bay.uuid).master_addresses),
+                self.baymodel.coe,
+                'default'))
+        self._wait_for_bay_complete(self.bay)
 
     @classmethod
     def _create_tls_ca_files(cls, client_conf_contents):

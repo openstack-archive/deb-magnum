@@ -12,9 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import textwrap
+
 import mock
 import pep8
-import textwrap
 
 from magnum.hacking import checks
 from magnum.tests import base
@@ -75,16 +76,6 @@ class HackingTestCase(base.TestCase):
 
     def _assert_has_no_errors(self, code, checker, filename=None):
         self._assert_has_errors(code, checker, filename=filename)
-
-    def test_policy_enforce_decorator(self):
-        code = """
-               @some_other_decorator
-               @policy.enforce_wsgi("bay", "create")
-               def my_method():
-                   pass
-               """
-        self._assert_has_errors(code, checks.check_policy_enforce_decorator,
-                                expected_errors=[(2, 0, "M301")])
 
     def test_assert_equal_in(self):
         errors = [(1, 0, "M338")]
@@ -191,16 +182,43 @@ class HackingTestCase(base.TestCase):
     def test_use_timeunitls_utcow(self):
         errors = [(1, 0, "M310")]
         check = checks.use_timeutils_utcnow
-        filename = "magnum/api/controller/v1/baymodel.py"
 
         code = "datetime.now"
-        self._assert_has_errors(code, check, errors, filename)
+        self._assert_has_errors(code, check, errors)
 
         code = "datetime.utcnow"
-        self._assert_has_errors(code, check, errors, filename)
+        self._assert_has_errors(code, check, errors)
 
         code = "datetime.aa"
-        self._assert_has_no_errors(code, check, filename)
+        self._assert_has_no_errors(code, check)
 
         code = "aaa"
-        self._assert_has_no_errors(code, check, filename)
+        self._assert_has_no_errors(code, check)
+
+    def test_dict_constructor_with_list_copy(self):
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "    dict([(i, connect_info[i])"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "    attrs = dict([(k, _from_json(v))"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "        type_names = dict((value, key) for key, value in"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "   dict((value, key) for key, value in"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "foo(param=dict((k, v) for k, v in bar.items()))"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            " dict([[i,i] for i in range(3)])"))))
+
+        self.assertEqual(1, len(list(checks.dict_constructor_with_list_copy(
+            "  dd = dict([i,i] for i in range(3))"))))
+
+        self.assertEqual(0, len(list(checks.dict_constructor_with_list_copy(
+            "        create_kwargs = dict(snapshot=snapshot,"))))
+
+        self.assertEqual(0, len(list(checks.dict_constructor_with_list_copy(
+            "      self._render_dict(xml, data_el, data.__dict__)"))))

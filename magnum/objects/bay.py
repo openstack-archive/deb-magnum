@@ -19,6 +19,7 @@ from magnum.common import exception
 from magnum.common import utils
 from magnum.db import api as dbapi
 from magnum.objects import base
+from magnum.objects import baymodel
 from magnum.objects import fields as m_fields
 
 
@@ -26,7 +27,14 @@ from magnum.objects import fields as m_fields
 class Bay(base.MagnumPersistentObject, base.MagnumObject,
           base.MagnumObjectDictCompat):
     # Version 1.0: Initial version
-    VERSION = '1.0'
+    # Version 1.1: Added 'bay_create_timeout' field
+    # Version 1.2: Add 'registry_trust_id' field
+    # Version 1.3: Added 'baymodel' field
+    # Version 1.4: Added more types of status to bay's status field
+    # Version 1.5: Reanme 'registry_trust_id' to 'trust_id'
+    #              Add 'trustee_user_name', 'trustee_password',
+    #              'trustee_user_id' field
+    VERSION = '1.5'
 
     dbapi = dbapi.get_instance()
 
@@ -40,6 +48,7 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         'stack_id': fields.StringField(nullable=True),
         'status': m_fields.BayStatusField(nullable=True),
         'status_reason': fields.StringField(nullable=True),
+        'bay_create_timeout': fields.IntegerField(nullable=True),
         'api_address': fields.StringField(nullable=True),
         'node_addresses': fields.ListOfStringsField(nullable=True),
         'node_count': fields.IntegerField(nullable=True),
@@ -48,13 +57,26 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         'master_addresses': fields.ListOfStringsField(nullable=True),
         'ca_cert_ref': fields.StringField(nullable=True),
         'magnum_cert_ref': fields.StringField(nullable=True),
+        'baymodel': fields.ObjectField('BayModel'),
+        'trust_id': fields.StringField(nullable=True),
+        'trustee_username': fields.StringField(nullable=True),
+        'trustee_password': fields.StringField(nullable=True),
+        'trustee_user_id': fields.StringField(nullable=True)
     }
 
     @staticmethod
     def _from_db_object(bay, db_bay):
         """Converts a database entity to a formal object."""
         for field in bay.fields:
-            bay[field] = db_bay[field]
+            if field != 'baymodel':
+                bay[field] = db_bay[field]
+
+        # Note(eliqiao): The following line needs to be placed outside the
+        # loop because there is a dependency from baymodel to baymodel_id.
+        # The baymodel_id must be populated first in the loop before it can be
+        # used to find the baymodel.
+        bay['baymodel'] = baymodel.BayModel.get_by_uuid(bay._context,
+                                                        bay.baymodel_id)
 
         bay.obj_reset_changes()
         return bay
@@ -69,6 +91,7 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         """Find a bay based on its id or uuid and return a Bay object.
 
         :param bay_id: the id *or* uuid of a bay.
+        :param context: Security context
         :returns: a :class:`Bay` object.
         """
         if utils.is_int_like(bay_id):
@@ -83,6 +106,7 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         """Find a bay based on its integer id and return a Bay object.
 
         :param bay_id: the id of a bay.
+        :param context: Security context
         :returns: a :class:`Bay` object.
         """
         db_bay = cls.dbapi.get_bay_by_id(context, bay_id)

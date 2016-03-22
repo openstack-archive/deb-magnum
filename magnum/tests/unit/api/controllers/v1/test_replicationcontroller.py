@@ -14,7 +14,6 @@ import datetime
 
 import mock
 from oslo_config import cfg
-from oslo_policy import policy
 from six.moves.urllib import parse as urlparse
 from wsme import types as wtypes
 
@@ -41,13 +40,14 @@ class TestListRC(api_base.FunctionalTest):
 
     def setUp(self):
         super(TestListRC, self).setUp()
-        obj_utils.create_test_bay(self.context)
+        obj_utils.create_test_bay(self.context, coe='kubernetes')
         self.rc = obj_utils.create_test_rc(self.context)
 
     @mock.patch.object(rpcapi.API, 'rc_list')
     def test_empty(self, mock_rc_list):
         mock_rc_list.return_value = []
-        response = self.get_json('/rcs')
+        response = self.get_json('/rcs?bay_ident=5d12f6fd-a196-4bf0-ae4c-'
+                                 '1f639a523a52')
         self.assertEqual([], response['rcs'])
 
     def _assert_rc_fields(self, rc):
@@ -81,7 +81,7 @@ class TestListRC(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_show')
     def test_get_one_by_name_multiple_rc(self, mock_rc_show):
@@ -98,7 +98,7 @@ class TestListRC(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_list')
     def test_get_all_with_pagination_marker(self, mock_rc_list):
@@ -109,7 +109,8 @@ class TestListRC(api_base.FunctionalTest):
             rc_list.append(rc.uuid)
 
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs?limit=3&marker=%s' % rc_list[2])
+        response = self.get_json('/rcs?limit=3&marker=%s&bay_ident=5d12f6fd-'
+                                 'a196-4bf0-ae4c-1f639a523a52' % rc_list[2])
         self.assertEqual(1, len(response['rcs']))
         self.assertEqual(rc_list[-1], response['rcs'][0]['uuid'])
 
@@ -117,7 +118,8 @@ class TestListRC(api_base.FunctionalTest):
     def test_detail(self, mock_rc_list):
         rc = obj_utils.create_test_rc(self.context)
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs/detail')
+        response = self.get_json('/rcs/detail?bay_ident=5d12f6fd-a196-4bf0-'
+                                 'ae4c-1f639a523a52')
         self.assertEqual(rc.uuid, response['rcs'][0]["uuid"])
         self._assert_rc_fields(response['rcs'][0])
 
@@ -130,7 +132,8 @@ class TestListRC(api_base.FunctionalTest):
             rc_list.append(rc.uuid)
 
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs/detail?limit=3&marker=%s'
+        response = self.get_json('/rcs/detail?limit=3&marker=%s&bay_ident='
+                                 '5d12f6fd-a196-4bf0-ae4c-1f639a523a52'
                                  % (rc_list[2]))
 
         self.assertEqual(1, len(response['rcs']))
@@ -151,7 +154,8 @@ class TestListRC(api_base.FunctionalTest):
                                           uuid=utils.generate_uuid())
             rc_list.append(rc.uuid)
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs')
+        response = self.get_json('/rcs?bay_ident=5d12f6fd-a196-4bf0-ae4c-'
+                                 '1f639a523a52')
         self.assertEqual(len(rc_list), len(response['rcs']))
         uuids = [r['uuid'] for r in response['rcs']]
         self.assertEqual(sorted(rc_list), sorted(uuids))
@@ -172,7 +176,8 @@ class TestListRC(api_base.FunctionalTest):
             rc = obj_utils.create_test_rc(self.context, id=id_,
                                           uuid=utils.generate_uuid())
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs/?limit=1')
+        response = self.get_json('/rcs/?limit=1&bay_ident=5d12f6fd-a196-4bf0'
+                                 '-ae4c-1f639a523a52')
         self.assertEqual(1, len(response['rcs']))
 
     @mock.patch.object(rpcapi.API, 'rc_list')
@@ -182,7 +187,8 @@ class TestListRC(api_base.FunctionalTest):
             rc = obj_utils.create_test_rc(self.context, id=id_,
                                           uuid=utils.generate_uuid())
         mock_rc_list.return_value = [rc]
-        response = self.get_json('/rcs')
+        response = self.get_json('/rcs?bay_ident=5d12f6fd-a196-4bf0-ae4c-'
+                                 '1f639a523a52')
         self.assertEqual(1, len(response['rcs']))
 
 
@@ -190,7 +196,7 @@ class TestPatch(api_base.FunctionalTest):
 
     def setUp(self):
         super(TestPatch, self).setUp()
-        obj_utils.create_test_bay(self.context)
+        obj_utils.create_test_bay(self.context, coe='kubernetes')
         self.rc = obj_utils.create_test_rc(self.context,
                                            images=['rc_example_A_image'])
         self.another_bay = obj_utils.create_test_bay(
@@ -250,7 +256,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_code)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_replace_internal_field(self):
         response = self.patch_json(
@@ -259,7 +265,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_code)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_replace_non_existent_rc(self):
         response = self.patch_json(
@@ -271,7 +277,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(400, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_update')
     @mock.patch.object(api_rc.ReplicationController, 'parse_manifest')
@@ -294,7 +300,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_update')
     @mock.patch.object(rpcapi.API, 'rc_show')
@@ -324,7 +330,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(400, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_remove_bay_uuid(self):
         response = self.patch_json('/rcs/%s/%s' % (self.rc.uuid,
@@ -333,7 +339,7 @@ class TestPatch(api_base.FunctionalTest):
                                    expect_errors=True)
         self.assertEqual(400, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_remove_internal_field(self):
         response = self.patch_json('/rcs/%s/%s' % (self.rc.uuid,
@@ -342,7 +348,7 @@ class TestPatch(api_base.FunctionalTest):
                                    expect_errors=True)
         self.assertEqual(400, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_remove_non_existent_property(self):
         response = self.patch_json(
@@ -351,7 +357,7 @@ class TestPatch(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(400, response.status_code)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_show')
     @mock.patch.object(rpcapi.API, 'rc_update')
@@ -419,16 +425,18 @@ class TestPost(api_base.FunctionalTest):
 
     def setUp(self):
         super(TestPost, self).setUp()
-        obj_utils.create_test_bay(self.context)
+        self.test_bay = obj_utils.create_test_bay(self.context,
+                                                  coe='kubernetes')
         self.rc_obj = obj_utils.create_test_rc(self.context)
         p = mock.patch.object(rpcapi.API, 'rc_create')
         self.mock_rc_create = p.start()
         self.mock_rc_create.return_value = self.rc_obj
         self.addCleanup(p.stop)
         p = mock.patch('magnum.objects.BayModel.get_by_uuid')
-        self.mock_baymodel_get_by_uuid = p.start()
-        self.mock_baymodel_get_by_uuid.return_value.coe = 'kubernetes'
-        self.addCleanup(p.stop)
+        self.mock_baymodel_get_by_uuid = obj_utils.get_test_baymodel(
+            self.context,
+            uuid=self.test_bay.baymodel_id,
+            coe='kubernetes')
 
     @mock.patch('oslo_utils.timeutils.utcnow')
     @mock.patch.object(rpcapi.API, 'rc_create')
@@ -482,7 +490,7 @@ class TestPost(api_base.FunctionalTest):
         response = self.post_json('/rcs', rc_dict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_create_rc_with_invalid_manifest(self):
         rc_dict = apiutils.rc_post_data()
@@ -490,7 +498,7 @@ class TestPost(api_base.FunctionalTest):
         response = self.post_json('/rcs', rc_dict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_create_rc_no_manifest(self):
         rc_dict = apiutils.rc_post_data()
@@ -498,7 +506,7 @@ class TestPost(api_base.FunctionalTest):
         response = self.post_json('/rcs', rc_dict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_create_rc_no_id_in_manifest(self):
         rc_dict = apiutils.rc_post_data()
@@ -506,14 +514,14 @@ class TestPost(api_base.FunctionalTest):
         response = self.post_json('/rcs', rc_dict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
 
 class TestDelete(api_base.FunctionalTest):
 
     def setUp(self):
         super(TestDelete, self).setUp()
-        obj_utils.create_test_bay(self.context)
+        obj_utils.create_test_bay(self.context, coe='kubernetes')
         self.rc = obj_utils.create_test_rc(self.context)
 
     @mock.patch.object(rpcapi.API, 'rc_delete')
@@ -527,7 +535,7 @@ class TestDelete(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_delete')
     def test_delete_rc_not_found(self, mock_rc_delete):
@@ -538,7 +546,7 @@ class TestDelete(api_base.FunctionalTest):
                                expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_delete')
     def test_delete_rc_with_name_not_found(self, mock_rc_delete):
@@ -549,7 +557,7 @@ class TestDelete(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     @mock.patch.object(rpcapi.API, 'rc_delete')
     def test_delete_rc_with_name(self, mock_rc_delete):
@@ -570,29 +578,35 @@ class TestDelete(api_base.FunctionalTest):
             expect_errors=True)
         self.assertEqual(500, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
 
 class TestRCEnforcement(api_base.FunctionalTest):
 
     def _common_policy_check(self, rule, func, *arg, **kwarg):
         self.policy.set_rules({rule: 'project:non_fake'})
-        exc = self.assertRaises(policy.PolicyNotAuthorized,
-                                func, *arg, **kwarg)
-        self.assertTrue(exc.message.startswith(rule))
-        self.assertTrue(exc.message.endswith('disallowed by policy'))
+        response = func(*arg, **kwarg)
+        self.assertEqual(403, response.status_int)
+        self.assertEqual('application/json', response.content_type)
+        self.assertTrue(
+            "Policy doesn't allow %s to be performed." % rule,
+            response.json['errors'][0]['detail'])
 
     def test_policy_disallow_get_all(self):
         self._common_policy_check(
-            'rc:get_all', self.get_json, '/rcs')
+            'rc:get_all', self.get_json, '/rcs', expect_errors=True)
 
     def test_policy_disallow_get_one(self):
         self._common_policy_check(
-            'rc:get', self.get_json, '/rcs/111-222-333')
+            'rc:get', self.get_json,
+            '/rcs/?bay_ident=%s' % utils.generate_uuid(),
+            expect_errors=True)
 
     def test_policy_disallow_detail(self):
         self._common_policy_check(
-            'rc:detail', self.get_json, '/rcs/111-222-333/detail')
+            'rc:detail', self.get_json,
+            '/rcs/detail?bay_ident=%s' % utils.generate_uuid(),
+            expect_errors=True)
 
     def test_policy_disallow_update(self):
         rc = obj_utils.create_test_rc(self.context,
@@ -602,13 +616,15 @@ class TestRCEnforcement(api_base.FunctionalTest):
         new_image = 'rc_example_B_image'
         self._common_policy_check(
             'rc:update', self.patch_json,
-            '/rcs/%s' % rc.uuid,
-            [{'path': '/images/0', 'value': new_image, 'op': 'replace'}])
+            '/rcs/%s/%s' % (rc.uuid, utils.generate_uuid()),
+            [{'path': '/images/0', 'value': new_image, 'op': 'replace'}],
+            expect_errors=True)
 
     def test_policy_disallow_create(self):
-        pdict = apiutils.rc_post_data()
+        bay = obj_utils.create_test_bay(self.context)
+        pdict = apiutils.rc_post_data(bay_uuid=bay.uuid)
         self._common_policy_check(
-            'rc:create', self.post_json, '/rcs', pdict)
+            'rc:create', self.post_json, '/rcs', pdict, expect_errors=True)
 
     def test_policy_disallow_delete(self):
         rc = obj_utils.create_test_rc(self.context,
@@ -616,4 +632,5 @@ class TestRCEnforcement(api_base.FunctionalTest):
                                       uuid=utils.generate_uuid())
         self._common_policy_check(
             'rc:delete', self.delete,
-            '/rcs/%s' % rc.uuid)
+            '/rcs/%s/%s' % (rc.uuid, utils.generate_uuid()),
+            expect_errors=True)

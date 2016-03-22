@@ -32,7 +32,7 @@ class AuthTokenMiddleware(auth_token.AuthProtocol):
     def __init__(self, app, conf, public_api_routes=None):
         if public_api_routes is None:
             public_api_routes = []
-        route_pattern_tpl = '%s\.json?$'
+        route_pattern_tpl = '%s(\.json)?$'
 
         try:
             self.public_api_routes = [re.compile(route_pattern_tpl % route_tpl)
@@ -58,3 +58,12 @@ class AuthTokenMiddleware(auth_token.AuthProtocol):
             return self._app(env, start_response)
 
         return super(AuthTokenMiddleware, self).__call__(env, start_response)
+
+    @classmethod
+    def factory(cls, global_config, **local_conf):
+        public_routes = local_conf.get('acl_public_routes', '')
+        public_api_routes = [path.strip() for path in public_routes.split(',')]
+
+        def _factory(app):
+            return cls(app, global_config, public_api_routes=public_api_routes)
+        return _factory

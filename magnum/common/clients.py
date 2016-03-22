@@ -13,18 +13,15 @@
 # under the License.
 
 from barbicanclient import client as barbicanclient
-from glanceclient.v2 import client as glanceclient
-from heatclient.v1 import client as heatclient
-from novaclient.v2 import client as novaclient
+from glanceclient import client as glanceclient
+from heatclient import client as heatclient
+from neutronclient.v2_0 import client as neutronclient
+from novaclient import client as novaclient
 from oslo_config import cfg
-from oslo_log import log as logging
 
 from magnum.common import exception
 from magnum.common import keystone
 from magnum.i18n import _
-
-
-LOG = logging.getLogger(__name__)
 
 
 magnum_client_opts = [
@@ -56,7 +53,10 @@ heat_client_opts = [
     cfg.BoolOpt('insecure',
                 default=False,
                 help=_("If set, then the server's certificate will not "
-                       "be verified."))]
+                       "be verified.")),
+    cfg.StrOpt('api_version',
+               default='1',
+               help=_('Version of Heat API to use in heatclient.'))]
 
 glance_client_opts = [
     cfg.StrOpt('region_name',
@@ -66,7 +66,10 @@ glance_client_opts = [
                default='publicURL',
                help=_(
                    'Type of endpoint in Identity service catalog to use '
-                   'for communication with the OpenStack service.'))]
+                   'for communication with the OpenStack service.')),
+    cfg.StrOpt('api_version',
+               default='2',
+               help=_('Version of Glance API to use in glanceclient.'))]
 
 barbican_client_opts = [
     cfg.StrOpt('region_name',
@@ -86,13 +89,34 @@ nova_client_opts = [
                default='publicURL',
                help=_(
                    'Type of endpoint in Identity service catalog to use '
+                   'for communication with the OpenStack service.')),
+    cfg.StrOpt('api_version',
+               default='2',
+               help=_('Version of Nova API to use in novaclient.'))]
+
+neutron_client_opts = [
+    cfg.StrOpt('region_name',
+               help=_('Region in Identity service catalog to use for '
+                      'communication with the OpenStack service.')),
+    cfg.StrOpt('endpoint_type',
+               default='publicURL',
+               help=_(
+                   'Type of endpoint in Identity service catalog to use '
                    'for communication with the OpenStack service.'))]
+
+cinder_client_opts = [
+    cfg.StrOpt('region_name',
+               help=_('Region in Identity service catalog to use for '
+                      'communication with the OpenStack service.'))]
+
 
 cfg.CONF.register_opts(magnum_client_opts, group='magnum_client')
 cfg.CONF.register_opts(heat_client_opts, group='heat_client')
 cfg.CONF.register_opts(glance_client_opts, group='glance_client')
 cfg.CONF.register_opts(barbican_client_opts, group='barbican_client')
 cfg.CONF.register_opts(nova_client_opts, group='nova_client')
+cfg.CONF.register_opts(neutron_client_opts, group='neutron_client')
+cfg.CONF.register_opts(cinder_client_opts, group='cinder_client')
 
 
 class OpenStackClients(object):
@@ -105,6 +129,7 @@ class OpenStackClients(object):
         self._glance = None
         self._barbican = None
         self._nova = None
+        self._neutron = None
 
     def url_for(self, **kwargs):
         return self.keystone().client.service_catalog.url_for(**kwargs)
@@ -115,6 +140,10 @@ class OpenStackClients(object):
         return self.url_for(service_type='container',
                             endpoint_type=endpoint_type,
                             region_name=region_name)
+
+    def cinder_region_name(self):
+        cinder_region_name = self._get_client_option('cinder', 'region_name')
+        return self.keystone().get_validate_region_name(cinder_region_name)
 
     @property
     def auth_url(self):
@@ -141,6 +170,7 @@ class OpenStackClients(object):
 
         endpoint_type = self._get_client_option('heat', 'endpoint_type')
         region_name = self._get_client_option('heat', 'region_name')
+        heatclient_version = self._get_client_option('heat', 'api_version')
         endpoint = self.url_for(service_type='orchestration',
                                 endpoint_type=endpoint_type,
                                 region_name=region_name)
@@ -156,7 +186,7 @@ class OpenStackClients(object):
             'key_file': self._get_client_option('heat', 'key_file'),
             'insecure': self._get_client_option('heat', 'insecure')
         }
-        self._heat = heatclient.Client(**args)
+        self._heat = heatclient.Client(heatclient_version, **args)
 
         return self._heat
 
@@ -167,6 +197,7 @@ class OpenStackClients(object):
 
         endpoint_type = self._get_client_option('glance', 'endpoint_type')
         region_name = self._get_client_option('glance', 'region_name')
+        glanceclient_version = self._get_client_option('glance', 'api_version')
         endpoint = self.url_for(service_type='image',
                                 endpoint_type=endpoint_type,
                                 region_name=region_name)
@@ -177,7 +208,7 @@ class OpenStackClients(object):
             'username': None,
             'password': None,
         }
-        self._glance = glanceclient.Client(**args)
+        self._glance = glanceclient.Client(glanceclient_version, **args)
 
         return self._glance
 
@@ -203,9 +234,30 @@ class OpenStackClients(object):
             return self._nova
         endpoint_type = self._get_client_option('nova', 'endpoint_type')
         region_name = self._get_client_option('nova', 'region_name')
+        novaclient_version = self._get_client_option('nova', 'api_version')
         endpoint = self.url_for(service_type='compute',
                                 endpoint_type=endpoint_type,
                                 region_name=region_name)
-        self._nova = novaclient.Client(auth_token=self.auth_token)
+        self._nova = novaclient.Client(novaclient_version,
+                                       auth_token=self.auth_token)
         self._nova.client.management_url = endpoint
         return self._nova
+
+    @exception.wrap_keystone_exception
+    def neutron(self):
+        if self._neutron:
+            return self._neutron
+        endpoint_type = self._get_client_option('neutron', 'endpoint_type')
+        region_name = self._get_client_option('neutron', 'region_name')
+        endpoint = self.url_for(service_type='network',
+                                endpoint_type=endpoint_type,
+                                region_name=region_name)
+
+        args = {
+            'auth_url': self.auth_url,
+            'token': self.auth_token,
+            'endpoint_url': endpoint,
+            'endpoint_type': endpoint_type,
+        }
+        self._neutron = neutronclient.Client(**args)
+        return self._neutron

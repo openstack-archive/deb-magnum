@@ -14,7 +14,6 @@
 from oslo_config import cfg
 
 from magnum.common import rpc_service
-from magnum import objects
 
 
 # The Backend API class serves as a AMQP client for communicating
@@ -35,14 +34,8 @@ class API(rpc_service.API):
         return self._call('bay_create', bay=bay,
                           bay_create_timeout=bay_create_timeout)
 
-    def bay_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.Bay.list(context, limit, marker, sort_key, sort_dir)
-
     def bay_delete(self, uuid):
         return self._call('bay_delete', uuid=uuid)
-
-    def bay_show(self, context, uuid):
-        return objects.Bay.get_by_uuid(context, uuid)
 
     def bay_update(self, bay):
         return self._call('bay_update', bay=bay)
@@ -52,34 +45,41 @@ class API(rpc_service.API):
     def service_create(self, service):
         return self._call('service_create', service=service)
 
-    def service_update(self, service):
-        return self._call('service_update', service=service)
+    def service_update(self, service_ident, bay_ident, manifest):
+        return self._call('service_update', service_ident=service_ident,
+                          bay_ident=bay_ident, manifest=manifest)
 
-    def service_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.Service.list(context, limit, marker, sort_key, sort_dir)
+    def service_list(self, context, bay_ident):
+        return self._call('service_list', bay_ident=bay_ident)
 
-    def service_delete(self, uuid):
-        return self._call('service_delete', uuid=uuid)
+    def service_delete(self, service_ident, bay_ident):
+        return self._call('service_delete',
+                          service_ident=service_ident,
+                          bay_ident=bay_ident)
 
-    def service_show(self, context, uuid):
-        return objects.Service.get_by_uuid(context, uuid)
+    def service_show(self, context, service_ident, bay_ident):
+        return self._call('service_show', service_ident=service_ident,
+                          bay_ident=bay_ident)
 
     # Pod Operations
 
     def pod_create(self, pod):
         return self._call('pod_create', pod=pod)
 
-    def pod_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.Pod.list(context, limit, marker, sort_key, sort_dir)
+    def pod_list(self, context, bay_ident):
+        return self._call('pod_list', bay_ident=bay_ident)
 
-    def pod_update(self, pod):
-        return self._call('pod_update', pod=pod)
+    def pod_update(self, pod_ident, bay_ident, manifest):
+        return self._call('pod_update', pod_ident=pod_ident,
+                          bay_ident=bay_ident, manifest=manifest)
 
-    def pod_delete(self, uuid):
-        return self._call('pod_delete', uuid=uuid)
+    def pod_delete(self, pod_ident, bay_ident):
+        return self._call('pod_delete', pod_ident=pod_ident,
+                          bay_ident=bay_ident)
 
-    def pod_show(self, context, uuid):
-        return objects.Pod.get_by_uuid(context, uuid)
+    def pod_show(self, context, pod_ident, bay_ident):
+        return self._call('pod_show', pod_ident=pod_ident,
+                          bay_ident=bay_ident)
 
     # ReplicationController Operations
 
@@ -104,10 +104,6 @@ class API(rpc_service.API):
 
     def container_create(self, container):
         return self._call('container_create', container=container)
-
-    def container_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.Container.list(context, limit, marker, sort_key,
-                                      sort_dir)
 
     def container_delete(self, container_uuid):
         return self._call('container_delete', container_uuid=container_uuid)
@@ -145,9 +141,6 @@ class API(rpc_service.API):
     def x509keypair_delete(self, uuid):
         return self._call('x509keypair_delete', uuid=uuid)
 
-    def x509keypair_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.X509KeyPair.list(context, limit, marker,
-                                        sort_key, sort_dir)
     # CA operations
 
     def sign_certificate(self, bay, certificate):
@@ -155,11 +148,6 @@ class API(rpc_service.API):
 
     def get_ca_certificate(self, bay):
         return self._call('get_ca_certificate', bay=bay)
-
-    # magnum-services
-    def magnum_services_list(self, context, limit, marker, sort_key, sort_dir):
-        return objects.MagnumService.list(context, limit, marker, sort_key,
-                                          sort_dir)
 
     # Versioned Objects indirection API
 

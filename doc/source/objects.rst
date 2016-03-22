@@ -83,11 +83,9 @@ magnum/tests/unit/objects/test_objects.py::
 
     object_data = {
         'Bay': '1.0-35edde13ad178e9419e7ea8b6d580bcd',
-        'BayLock': '1.0-7d1eb08cf2070523bd210369c7a2e076',
         'BayModel': '1.0-06863f04ab4b98307e3d1b736d3137bf',
         'Container': '1.1-22b40e8eed0414561ca921906b189820',
         'MyObj': '1.0-b43567e512438205e32f4e95ca616697',
-        'Node': '1.0-30943e6e3387a2fae7490b57c4239a17',
         'Pod': '1.0-69b579203c6d726be7878c606626e438',
         'ReplicationController': '1.0-782b7deb9307b2807101541b7e58b8a2',
         'Service': '1.0-d4b8c0f3a234aec35d273196e18f7ed1',

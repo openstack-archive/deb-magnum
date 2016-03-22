@@ -22,7 +22,7 @@ import wsmeext.pecan as wsme_pecan
 from magnum.api.controllers import base
 from magnum.api.controllers import link
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
+from magnum.api import utils as api_utils
 from magnum.common import exception
 from magnum.common import policy
 from magnum import objects
@@ -47,7 +47,7 @@ class Certificate(base.APIBase):
     def _set_bay_uuid(self, value):
         if value and self._bay_uuid != value:
             try:
-                self._bay = api_utils.get_rpc_resource('Bay', value)
+                self._bay = api_utils.get_resource('Bay', value)
                 self._bay_uuid = self._bay.uuid
             except exception.BayNotFound as e:
                 # Change error code because 404 (NotFound) is inappropriate
@@ -83,7 +83,7 @@ class Certificate(base.APIBase):
 
     def get_bay(self):
         if not self._bay:
-            self._bay = api_utils.get_rpc_resource('Bay', self.bay_uuid)
+            self._bay = api_utils.get_resource('Bay', self.bay_uuid)
         return self._bay
 
     @staticmethod
@@ -124,7 +124,6 @@ class CertificateController(rest.RestController):
         'detail': ['GET'],
     }
 
-    @policy.enforce_wsgi("certificate", "get")
     @wsme_pecan.wsexpose(Certificate, types.uuid_or_name)
     def get_one(self, bay_ident):
         """Retrieve information about the given certificate.
@@ -132,23 +131,28 @@ class CertificateController(rest.RestController):
         :param bay_ident: UUID of a bay or
         logical name of the bay.
         """
-        rpc_bay = api_utils.get_rpc_resource('Bay', bay_ident)
-        certificate = pecan.request.rpcapi.get_ca_certificate(rpc_bay)
+        context = pecan.request.context
+        bay = api_utils.get_resource('Bay', bay_ident)
+        policy.enforce(context, 'certificate:get', bay,
+                       action='certificate:get')
+        certificate = pecan.request.rpcapi.get_ca_certificate(bay)
         return Certificate.convert_with_links(certificate)
 
-    @policy.enforce_wsgi("certificate", "create")
     @wsme_pecan.wsexpose(Certificate, body=Certificate, status_code=201)
     def post(self, certificate):
         """Create a new certificate.
 
         :param certificate: a certificate within the request body.
         """
-        certificate_dict = certificate.as_dict()
         context = pecan.request.context
+        bay = certificate.get_bay()
+        policy.enforce(context, 'certificate:create', bay,
+                       action='certificate:create')
+        certificate_dict = certificate.as_dict()
         certificate_dict['project_id'] = context.project_id
         certificate_dict['user_id'] = context.user_id
         cert_obj = objects.Certificate(context, **certificate_dict)
 
-        new_cert = pecan.request.rpcapi.sign_certificate(certificate.get_bay(),
+        new_cert = pecan.request.rpcapi.sign_certificate(bay,
                                                          cert_obj)
         return Certificate.convert_with_links(new_cert)

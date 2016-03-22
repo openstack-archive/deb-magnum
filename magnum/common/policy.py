@@ -15,14 +15,19 @@
 
 """Policy Engine For magnum."""
 
-import functools
+import decorator
 from oslo_config import cfg
+from oslo_log import log as logging
 from oslo_policy import policy
 import pecan
+
+from magnum.common import exception
 
 
 _ENFORCER = None
 CONF = cfg.CONF
+
+LOG = logging.getLogger(__name__)
 
 
 # we can get a policy enforcer by this init.
@@ -59,14 +64,14 @@ def init(policy_file=None, rules=None,
     return _ENFORCER
 
 
-def enforce(context, action=None, target=None,
+def enforce(context, rule=None, target=None,
             do_raise=True, exc=None, *args, **kwargs):
 
     """Checks authorization of a rule against the target and credentials.
 
         :param dict context: As much information about the user performing the
                              action as possible.
-        :param action: The rule to evaluate.
+        :param rule: The rule to evaluate.
         :param dict target: As much information about the object being operated
                             on as possible.
         :param do_raise: Whether to raise an exception or not if check
@@ -85,15 +90,15 @@ def enforce(context, action=None, target=None,
     """
     enforcer = init()
     credentials = context.to_dict()
+    if not exc:
+        exc = exception.PolicyNotAuthorized
     if target is None:
         target = {'project_id': context.project_id,
                   'user_id': context.user_id}
-    return enforcer.enforce(action, target, credentials,
+    return enforcer.enforce(rule, target, credentials,
                             do_raise=do_raise, exc=exc, *args, **kwargs)
 
 
-# NOTE(Shaohe Feng): This decorator MUST appear first (the outermost
-# decorator) on an API method for it to work correctly
 def enforce_wsgi(api_name, act=None):
     """This is a decorator to simplify wsgi action policy rule check.
 
@@ -109,12 +114,10 @@ def enforce_wsgi(api_name, act=None):
                def delete(self, bay_ident):
                    ...
     """
-    def wrapper(fn):
+    @decorator.decorator
+    def wrapper(fn, *args, **kwargs):
         action = "%s:%s" % (api_name, (act or fn.__name__))
-
-        @functools.wraps(fn)
-        def handle(self, *args, **kwargs):
-            enforce(pecan.request.context, action, None)
-            return fn(self, *args, **kwargs)
-        return handle
+        enforce(pecan.request.context, action,
+                exc=exception.PolicyNotAuthorized, action=action)
+        return fn(*args, **kwargs)
     return wrapper

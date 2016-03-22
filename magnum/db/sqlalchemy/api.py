@@ -18,7 +18,6 @@ from oslo_config import cfg
 from oslo_db import exception as db_exc
 from oslo_db.sqlalchemy import session as db_session
 from oslo_db.sqlalchemy import utils as db_utils
-from oslo_log import log
 from oslo_utils import timeutils
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy.orm.exc import NoResultFound
@@ -30,8 +29,6 @@ from magnum.db.sqlalchemy import models
 from magnum.i18n import _
 
 CONF = cfg.CONF
-
-LOG = log.getLogger(__name__)
 
 
 _FACADE = None
@@ -252,38 +249,6 @@ class Connection(api.Connection):
             ref.update(values)
         return ref
 
-    def create_bay_lock(self, bay_uuid, conductor_id):
-        session = get_session()
-        with session.begin():
-            query = model_query(models.BayLock, session=session)
-            lock = query.filter_by(bay_uuid=bay_uuid).first()
-            if lock is not None:
-                return lock.conductor_id
-            session.add(models.BayLock(bay_uuid=bay_uuid,
-                                       conductor_id=conductor_id))
-
-    def steal_bay_lock(self, bay_uuid, old_conductor_id, new_conductor_id):
-        session = get_session()
-        with session.begin():
-            query = model_query(models.BayLock, session=session)
-            lock = query.filter_by(bay_uuid=bay_uuid).first()
-            if lock is None:
-                return True
-            elif lock.conductor_id != old_conductor_id:
-                return lock.conductor_id
-            else:
-                lock.update({'conductor_id': new_conductor_id})
-
-    def release_bay_lock(self, bay_uuid, conductor_id):
-        session = get_session()
-        with session.begin():
-            query = model_query(models.BayLock, session=session)
-            query = query.filter_by(bay_uuid=bay_uuid,
-                                    conductor_id=conductor_id)
-            count = query.delete()
-            if count == 0:
-                return True
-
     def _add_baymodels_filters(self, query, filters):
         if filters is None:
             filters = {}
@@ -354,14 +319,13 @@ class Connection(api.Connection):
         except NoResultFound:
             raise exception.BayModelNotFound(baymodel=baymodel_name)
 
-    def destroy_baymodel(self, baymodel_id):
-        def is_baymodel_referenced(session, baymodel_uuid):
-            """Checks whether the baymodel is referenced by bay(s)."""
-            query = model_query(models.Bay, session=session)
-            query = self._add_bays_filters(query,
-                                           {'baymodel_id': baymodel_uuid})
-            return query.count() != 0
+    def is_baymodel_referenced(self, session, baymodel_uuid):
+        """Checks whether the baymodel is referenced by bay(s)."""
+        query = model_query(models.Bay, session=session)
+        query = self._add_bays_filters(query, {'baymodel_id': baymodel_uuid})
+        return query.count() != 0
 
+    def destroy_baymodel(self, baymodel_id):
         session = get_session()
         with session.begin():
             query = model_query(models.BayModel, session=session)
@@ -372,7 +336,7 @@ class Connection(api.Connection):
             except NoResultFound:
                 raise exception.BayModelNotFound(baymodel=baymodel_id)
 
-            if is_baymodel_referenced(session, baymodel_ref['uuid']):
+            if self.is_baymodel_referenced(session, baymodel_ref['uuid']):
                 raise exception.BayModelReferenced(baymodel=baymodel_id)
 
             query.delete()
@@ -394,6 +358,9 @@ class Connection(api.Connection):
                 ref = query.with_lockmode('update').one()
             except NoResultFound:
                 raise exception.BayModelNotFound(baymodel=baymodel_id)
+
+            if self.is_baymodel_referenced(session, ref['uuid']):
+                raise exception.BayModelReferenced(baymodel=baymodel_id)
 
             ref.update(values)
         return ref
@@ -491,110 +458,6 @@ class Connection(api.Connection):
 
             if 'provision_state' in values:
                 values['provision_updated_at'] = timeutils.utcnow()
-
-            ref.update(values)
-        return ref
-
-    def _add_nodes_filters(self, query, filters):
-        if filters is None:
-            filters = {}
-
-        if 'associated' in filters:
-            if filters['associated']:
-                query = query.filter(models.Node.ironic_node_id != None)
-            else:
-                query = query.filter(models.Node.ironic_node_id == None)
-        if 'type' in filters:
-            query = query.filter_by(type=filters['type'])
-        if 'image_id' in filters:
-            query = query.filter_by(image_id=filters['image_id'])
-        if 'project_id' in filters:
-            query = query.filter_by(project_id=filters['project_id'])
-        if 'user_id' in filters:
-            query = query.filter_by(user_id=filters['user_id'])
-
-        return query
-
-    def get_node_list(self, context, filters=None, limit=None, marker=None,
-                      sort_key=None, sort_dir=None):
-        query = model_query(models.Node)
-        query = self._add_tenant_filters(context, query)
-        query = self._add_nodes_filters(query, filters)
-        return _paginate_query(models.Node, limit, marker,
-                               sort_key, sort_dir, query)
-
-    def create_node(self, values):
-        # ensure defaults are present for new nodes
-        if not values.get('uuid'):
-            values['uuid'] = utils.generate_uuid()
-
-        node = models.Node()
-        node.update(values)
-        try:
-            node.save()
-        except db_exc.DBDuplicateEntry as exc:
-            if 'ironic_node_id' in exc.columns:
-                raise exception.InstanceAssociated(
-                    instance_uuid=values['ironic_node_id'],
-                    node=values['uuid'])
-            raise exception.NodeAlreadyExists(uuid=values['uuid'])
-        return node
-
-    def get_node_by_id(self, context, node_id):
-        query = model_query(models.Node)
-        query = self._add_tenant_filters(context, query)
-        query = query.filter_by(id=node_id)
-        try:
-            return query.one()
-        except NoResultFound:
-            raise exception.NodeNotFound(node=node_id)
-
-    def get_node_by_uuid(self, context, node_uuid):
-        query = model_query(models.Node)
-        query = self._add_tenant_filters(context, query)
-        query = query.filter_by(uuid=node_uuid)
-        try:
-            return query.one()
-        except NoResultFound:
-            raise exception.NodeNotFound(node=node_uuid)
-
-    def destroy_node(self, node_id):
-        session = get_session()
-        with session.begin():
-            query = model_query(models.Node, session=session)
-            query = add_identity_filter(query, node_id)
-            count = query.delete()
-            if count != 1:
-                raise exception.NodeNotFound(node_id)
-
-    def update_node(self, node_id, values):
-        # NOTE(dtantsur): this can lead to very strange errors
-        if 'uuid' in values:
-            msg = _("Cannot overwrite UUID for an existing Node.")
-            raise exception.InvalidParameterValue(err=msg)
-
-        try:
-            return self._do_update_node(node_id, values)
-        except db_exc.DBDuplicateEntry:
-            raise exception.InstanceAssociated(
-                instance_uuid=values['ironic_node_id'],
-                node=node_id)
-
-    def _do_update_node(self, node_id, values):
-        session = get_session()
-        with session.begin():
-            query = model_query(models.Node, session=session)
-            query = add_identity_filter(query, node_id)
-            try:
-                ref = query.with_lockmode('update').one()
-            except NoResultFound:
-                raise exception.NodeNotFound(node=node_id)
-
-            # Prevent ironic_node_id overwriting
-            if values.get("ironic_node_id") and ref.ironic_node_id:
-                raise exception.NodeAssociated(
-                    node=node_id,
-                    instance=ref.ironic_node_id)
 
             ref.update(values)
         return ref
@@ -1046,3 +909,19 @@ class Connection(api.Connection):
 
         return _paginate_query(models.MagnumService, limit, marker,
                                sort_key, sort_dir, query)
+
+    def create_quota(self, values):
+        quotas = models.Quota()
+        quotas.update(values)
+        try:
+            quotas.save()
+        except db_exc.DBDuplicateEntry:
+            raise exception.QuotaAlreadyExists(project_id=values['project_id'],
+                                               resource=values['resource'])
+        return quotas
+
+    def quota_get_all_by_project_id(self, project_id):
+        query = model_query(models.Quota)
+        result = query.filter_by(project_id=project_id).all()
+
+        return result

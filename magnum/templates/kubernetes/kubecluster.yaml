@@ -36,12 +36,12 @@ parameters:
     default: 8.8.8.8
 
   number_of_masters:
-    type: string
+    type: number
     description: how many kubernetes masters to spawn
     default: 1
 
   number_of_minions:
-    type: string
+    type: number
     description: how many kubernetes minions to spawn
     default: 1
 
@@ -135,6 +135,7 @@ parameters:
     type: string
     description: password used by docker registry
     default: "password"
+    hidden: true
 
   registry_domain:
     type: string
@@ -145,6 +146,7 @@ parameters:
     type: string
     description: trust_id used by docker registry
     default: "trust_id"
+    hidden: true
 
   registry_auth_url:
     type: string
@@ -174,12 +176,6 @@ parameters:
       size fo the data segments for the swift dynamic large objects
     default: 5242880
 
-  auth_url:
-    type: string
-    description: >
-      url for kubernetes to authenticate before sending request to neutron
-      must be v2 since kubernetes backend only suppor v2 at this point
-
   username:
     type: string
     description: >
@@ -192,6 +188,7 @@ parameters:
       fill in for Kubernetes config file
     default:
       ChangeMe
+    hidden: true
 
   tenant_name:
     type: string
@@ -245,6 +242,37 @@ parameters:
     type: string
     description: no proxies for docker
     default: ""
+
+  trustee_domain_id:
+    type: string
+    description: domain id of the trustee
+    default: ""
+
+  trustee_user_id:
+    type: string
+    description: user id of the trustee
+    default: ""
+
+  trustee_username:
+    type: string
+    description: username of the trustee
+    default: ""
+
+  trustee_password:
+    type: string
+    description: password of the trustee
+    default: ""
+    hidden: true
+
+  trust_id:
+    type: string
+    description: id of the trust which is used by the trustee
+    default: ""
+    hidden: true
+
+  auth_url:
+    type: string
+    description: url for keystone
 
 resources:
 
@@ -398,6 +426,7 @@ resources:
           master_flavor: {get_param: master_flavor}
           external_network: {get_param: external_network}
           kube_allow_priv: {get_param: kube_allow_priv}
+          docker_volume_size: {get_param: docker_volume_size}
           wait_condition_timeout: {get_param: wait_condition_timeout}
           network_driver: {get_param: network_driver}
           flannel_network_cidr: {get_param: flannel_network_cidr}

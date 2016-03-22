@@ -42,7 +42,7 @@ def _generate_ca_cert(issuer_name):
         private_key_passphrase=ca_password,
         name=issuer_name,
     )
-    LOG.debug('CA cert is created: %s' % ca_cert_ref)
+    LOG.debug('CA cert is created: %s', ca_cert_ref)
     return ca_cert_ref, ca_cert, ca_password
 
 
@@ -68,8 +68,17 @@ def _generate_client_cert(issuer_name, ca_cert, ca_password):
         private_key_passphrase=client_password,
         name=CONDUCTOR_CLIENT_NAME,
     )
-    LOG.debug('Magnum client cert is created: %s' % magnum_cert_ref)
+    LOG.debug('Magnum client cert is created: %s', magnum_cert_ref)
     return magnum_cert_ref
+
+
+def _get_issuer_name(bay):
+    issuer_name = bay.name
+    # When user create a Bay without name, the bay.name is None.
+    # We should use bay.uuid as issuer name.
+    if issuer_name is None:
+        issuer_name = bay.uuid
+    return issuer_name
 
 
 def generate_certificates_to_bay(bay):
@@ -78,11 +87,9 @@ def generate_certificates_to_bay(bay):
     :param bay: The bay to set CA cert and magnum client cert
     :returns: CA cert uuid and magnum client cert uuid
     """
-    issuer_name = bay.name
-    if issuer_name is None:
-        issuer_name = bay.uuid
+    issuer_name = _get_issuer_name(bay)
 
-    LOG.debug('Start to generate certificates: %s' % issuer_name)
+    LOG.debug('Start to generate certificates: %s', issuer_name)
 
     ca_cert_ref, ca_cert, ca_password = _generate_ca_cert(issuer_name)
     magnum_cert_ref = _generate_client_cert(issuer_name, ca_cert, ca_password)
@@ -134,7 +141,9 @@ def sign_node_certificate(bay, csr):
         resource_ref=bay.uuid
     )
 
-    node_cert = x509.sign(csr, bay.name, ca_cert.get_private_key(),
+    node_cert = x509.sign(csr,
+                          _get_issuer_name(bay),
+                          ca_cert.get_private_key(),
                           ca_cert.get_private_key_passphrase())
     return node_cert
 
@@ -150,4 +159,4 @@ def delete_certificates_from_bay(bay):
                 cert_manager.get_backend().CertManager.delete_cert(
                     cert_ref, resource_ref=bay.uuid)
         except Exception:
-            LOG.warn(_LW("Deleting cert is failed: %s") % cert_ref)
+            LOG.warning(_LW("Deleting cert is failed: %s"), cert_ref)

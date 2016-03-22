@@ -11,8 +11,10 @@
 #    limitations under the License.
 
 """Magnum Docker RPC handler."""
-from docker import errors
+
 import functools
+
+from docker import errors
 from oslo_log import log as logging
 import six
 
@@ -30,12 +32,14 @@ def wrap_container_exception(f):
         try:
             return f(self, context, *args, **kwargs)
         except Exception as e:
-            container_uuid = kwargs.get('container_uuid')
-            if container_uuid is not None:
-                LOG.exception(_LE("Error while connect to docker "
-                                  "container %(name)s: %(error)s"),
-                              {'name': container_uuid,
-                               'error': str(e)})
+            container_uuid = None
+            if 'container_uuid' in kwargs:
+                container_uuid = kwargs.get('container_uuid')
+            elif 'container' in kwargs:
+                container_uuid = kwargs.get('container').uuid
+
+            LOG.exception(_LE("Error while connect to docker "
+                              "container %s"), container_uuid)
             raise exception.ContainerException(
                 "Docker internal Error: %s" % str(e))
     return functools.wraps(f)(wrapped)
@@ -76,10 +80,18 @@ class Handler(object):
                 image_repo, image_tag = docker_utils.parse_docker_image(image)
                 docker.pull(image_repo, tag=image_tag)
                 docker.inspect_image(self._encode_utf8(container.image))
-                docker.create_container(image, name=name,
-                                        hostname=container_uuid,
-                                        command=container.command,
-                                        mem_limit=container.memory)
+                kwargs = {'name': name,
+                          'hostname': container_uuid,
+                          'command': container.command,
+                          'environment': container.environment}
+                if docker_utils.is_docker_api_version_atleast(docker, '1.19'):
+                    if container.memory is not None:
+                        kwargs['host_config'] = {'mem_limit':
+                                                 container.memory}
+                else:
+                    kwargs['mem_limit'] = container.memory
+
+                docker.create_container(image, **kwargs)
                 container.status = fields.ContainerStatus.STOPPED
                 return container
             except errors.APIError:
@@ -90,7 +102,7 @@ class Handler(object):
 
     @wrap_container_exception
     def container_delete(self, context, container_uuid):
-        LOG.debug("container_delete %s" % container_uuid)
+        LOG.debug("container_delete %s", container_uuid)
         with docker_utils.docker_for_container(context,
                                                container_uuid) as docker:
             docker_id = self._find_container_by_name(docker,
@@ -101,7 +113,7 @@ class Handler(object):
 
     @wrap_container_exception
     def container_show(self, context, container_uuid):
-        LOG.debug("container_show %s" % container_uuid)
+        LOG.debug("container_show %s", container_uuid)
         with docker_utils.docker_for_container(context,
                                                container_uuid) as docker:
             container = objects.Container.get_by_uuid(context, container_uuid)
@@ -138,7 +150,7 @@ class Handler(object):
 
     @wrap_container_exception
     def _container_action(self, context, container_uuid, status, docker_func):
-        LOG.debug("%s container %s ..." % (docker_func, container_uuid))
+        LOG.debug("%s container %s ...", (docker_func, container_uuid))
         with docker_utils.docker_for_container(context,
                                                container_uuid) as docker:
             docker_id = self._find_container_by_name(docker,
@@ -174,7 +186,7 @@ class Handler(object):
 
     @wrap_container_exception
     def container_logs(self, context, container_uuid):
-        LOG.debug("container_logs %s" % container_uuid)
+        LOG.debug("container_logs %s", container_uuid)
         with docker_utils.docker_for_container(context,
                                                container_uuid) as docker:
             docker_id = self._find_container_by_name(docker,
@@ -183,7 +195,7 @@ class Handler(object):
 
     @wrap_container_exception
     def container_exec(self, context, container_uuid, command):
-        LOG.debug("container_exec %s command %s" %
+        LOG.debug("container_exec %s command %s",
                   (container_uuid, command))
         with docker_utils.docker_for_container(context,
                                                container_uuid) as docker:

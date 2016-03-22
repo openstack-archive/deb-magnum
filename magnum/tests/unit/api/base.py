@@ -45,6 +45,23 @@ class FunctionalTest(base.DbTestCase):
                               group='keystone_authtoken')
         cfg.CONF.set_override("admin_user", "admin",
                               group='keystone_authtoken')
+
+        # Determine where we are so we can set up paths in the config
+        root_dir = self.get_path()
+        self.config = {
+            'app': {
+                'root': 'magnum.api.controllers.root.RootController',
+                'modules': ['magnum.api'],
+                'static_root': '%s/public' % root_dir,
+                'template_path': '%s/api/templates' % root_dir,
+                'hooks': [
+                    hooks.ContextHook(),
+                    hooks.RPCHook(),
+                    hooks.NoExceptionTracebackHook(),
+                ],
+            },
+        }
+
         self.app = self._make_app()
 
         def reset_pecan():
@@ -56,27 +73,19 @@ class FunctionalTest(base.DbTestCase):
         self._check_version = p.start()
         self.addCleanup(p.stop)
 
-    def _make_app(self, enable_acl=False):
-        # Determine where we are so we can set up paths in the config
-        root_dir = self.get_path()
+    def _verify_attrs(self, attrs, response, positive=True):
+        if positive is True:
+            verify_method = self.assertIn
+        else:
+            verify_method = self.assertNotIn
+        for attr in attrs:
+            verify_method(attr, response)
 
-        self.config = {
-            'app': {
-                'root': 'magnum.api.controllers.root.RootController',
-                'modules': ['magnum.api'],
-                'static_root': '%s/public' % root_dir,
-                'template_path': '%s/api/templates' % root_dir,
-                'enable_acl': enable_acl,
-                'acl_public_routes': ['/', '/v1'],
-                'hooks': [
-                    hooks.ContextHook(),
-                    hooks.RPCHook(),
-                    hooks.NoExceptionTracebackHook(),
-                ],
-            },
-        }
+    def _make_app(self, config=None):
+        if not config:
+            config = self.config
 
-        return pecan.testing.load_test_app(self.config)
+        return pecan.testing.load_test_app(config)
 
     def _request_json(self, path, params, expect_errors=False, headers=None,
                       method="post", extra_environ=None, status=None,

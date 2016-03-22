@@ -10,17 +10,16 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import mock
+from mock import patch
+from webtest.app import AppError
+
 from magnum.common import utils as comm_utils
 from magnum import objects
 from magnum.objects import fields
 from magnum.tests.unit.api import base as api_base
 from magnum.tests.unit.db import utils
-
-from oslo_policy import policy
-
-import mock
-from mock import patch
-from webtest.app import AppError
+from magnum.tests.unit.objects import utils as obj_utils
 
 
 class TestContainerController(api_base.FunctionalTest):
@@ -29,15 +28,16 @@ class TestContainerController(api_base.FunctionalTest):
         p = patch('magnum.objects.Bay.get_by_uuid')
         self.mock_bay_get_by_uuid = p.start()
         self.addCleanup(p.stop)
-        p = patch('magnum.objects.BayModel.get_by_uuid')
-        self.mock_baymodel_get_by_uuid = p.start()
-        self.addCleanup(p.stop)
 
         def fake_get_by_uuid(context, uuid):
-            return objects.Bay(self.context, **utils.get_test_bay(uuid=uuid))
+            bay_dict = utils.get_test_bay(uuid=uuid)
+            baymodel = obj_utils.get_test_baymodel(
+                context, coe='swarm', uuid=bay_dict['baymodel_id'])
+            bay = objects.Bay(self.context, **bay_dict)
+            bay.baymodel = baymodel
+            return bay
 
         self.mock_bay_get_by_uuid.side_effect = fake_get_by_uuid
-        self.mock_baymodel_get_by_uuid.return_value.coe = 'swarm'
 
     @patch('magnum.conductor.api.API.container_create')
     def test_create_container(self, mock_container_create):
@@ -45,7 +45,8 @@ class TestContainerController(api_base.FunctionalTest):
 
         params = ('{"name": "My Docker", "image": "ubuntu",'
                   '"command": "env", "memory": "512m",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
+                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}')
         response = self.app.post('/v1/containers',
                                  params=params,
                                  content_type='application/json')
@@ -64,7 +65,8 @@ class TestContainerController(api_base.FunctionalTest):
 
         params = ('{"name": "My Docker", "image": "ubuntu",'
                   '"command": "env", "memory": "512m",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
+                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}')
         self.app.post('/v1/containers',
                       params=params,
                       content_type='application/json')
@@ -77,10 +79,13 @@ class TestContainerController(api_base.FunctionalTest):
                                            mock_container_create,
                                            mock_container_show):
         mock_container_create.side_effect = lambda x: x
+        bay = obj_utils.create_test_bay(self.context)
         # Create a container with a command
         params = ('{"name": "My Docker", "image": "ubuntu",'
                   '"command": "env", "memory": "512m",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
+                  '"bay_uuid": "%s",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}' %
+                  bay.uuid)
         response = self.app.post('/v1/containers',
                                  params=params,
                                  content_type='application/json')
@@ -98,6 +103,8 @@ class TestContainerController(api_base.FunctionalTest):
         self.assertEqual('env', c.get('command'))
         self.assertEqual('Stopped', c.get('status'))
         self.assertEqual('512m', c.get('memory'))
+        self.assertEqual({"key1": "val1", "key2": "val2"},
+                         c.get('environment'))
         # Delete the container we created
         response = self.app.delete('/v1/containers/%s' % c.get('uuid'))
         self.assertEqual(204, response.status_int)
@@ -119,6 +126,79 @@ class TestContainerController(api_base.FunctionalTest):
         # Create a container with a command
         params = ('{"name": "My Docker", "image": "ubuntu",'
                   '"command": "env", "memory": "512m",'
+                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}')
+        response = self.app.post('/v1/containers',
+                                 params=params,
+                                 content_type='application/json')
+        self.assertEqual(201, response.status_int)
+        # get all containers
+        container = objects.Container.list(self.context)[0]
+        container.status = 'Stopped'
+        mock_container_show.return_value = container
+        response = self.app.get('/v1/containers')
+        self.assertEqual(200, response.status_int)
+        self.assertEqual(1, len(response.json))
+        c = response.json['containers'][0]
+        self.assertIsNotNone(c.get('uuid'))
+        self.assertEqual('My Docker', c.get('name'))
+        self.assertEqual('env', c.get('command'))
+        self.assertEqual('Stopped', c.get('status'))
+        self.assertEqual('512m', c.get('memory'))
+        self.assertEqual({"key1": "val1", "key2": "val2"},
+                         c.get('environment'))
+        # Delete the container we created
+        response = self.app.delete('/v1/containers/%s' % c.get('uuid'))
+        self.assertEqual(204, response.status_int)
+
+        response = self.app.get('/v1/containers')
+        self.assertEqual(200, response.status_int)
+        c = response.json['containers']
+        self.assertEqual(0, len(c))
+        self.assertTrue(mock_container_create.called)
+
+    @patch('magnum.conductor.api.API.container_show')
+    @patch('magnum.conductor.api.API.container_create')
+    def test_create_container_without_memory(self,
+                                             mock_container_create,
+                                             mock_container_show):
+        mock_container_create.side_effect = lambda x: x
+        bay = obj_utils.create_test_bay(self.context)
+        # Create a container with a command
+        params = ('{"name": "My Docker", "image": "ubuntu",'
+                  '"command": "env",'
+                  '"bay_uuid": "%s",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}' %
+                  bay.uuid)
+        response = self.app.post('/v1/containers',
+                                 params=params,
+                                 content_type='application/json')
+        self.assertEqual(201, response.status_int)
+        # get all containers
+        container = objects.Container.list(self.context)[0]
+        container.status = 'Stopped'
+        mock_container_show.return_value = container
+        response = self.app.get('/v1/containers')
+        self.assertEqual(200, response.status_int)
+        self.assertEqual(1, len(response.json))
+        c = response.json['containers'][0]
+        self.assertIsNotNone(c.get('uuid'))
+        self.assertEqual('My Docker', c.get('name'))
+        self.assertEqual('env', c.get('command'))
+        self.assertEqual('Stopped', c.get('status'))
+        self.assertIsNone(c.get('memory'))
+        self.assertEqual({"key1": "val1", "key2": "val2"},
+                         c.get('environment'))
+
+    @patch('magnum.conductor.api.API.container_show')
+    @patch('magnum.conductor.api.API.container_create')
+    def test_create_container_without_environment(self,
+                                                  mock_container_create,
+                                                  mock_container_show):
+        mock_container_create.side_effect = lambda x: x
+        # Create a container with a command
+        params = ('{"name": "My Docker", "image": "ubuntu",'
+                  '"command": "env", "memory": "512m",'
                   '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
         response = self.app.post('/v1/containers',
                                  params=params,
@@ -137,49 +217,14 @@ class TestContainerController(api_base.FunctionalTest):
         self.assertEqual('env', c.get('command'))
         self.assertEqual('Stopped', c.get('status'))
         self.assertEqual('512m', c.get('memory'))
-        # Delete the container we created
-        response = self.app.delete('/v1/containers/%s' % c.get('uuid'))
-        self.assertEqual(204, response.status_int)
-
-        response = self.app.get('/v1/containers')
-        self.assertEqual(200, response.status_int)
-        c = response.json['containers']
-        self.assertEqual(0, len(c))
-        self.assertTrue(mock_container_create.called)
-
-    @patch('magnum.conductor.api.API.container_show')
-    @patch('magnum.conductor.api.API.container_create')
-    def test_create_container_without_memory(self,
-                                             mock_container_create,
-                                             mock_container_show):
-        mock_container_create.side_effect = lambda x: x
-        # Create a container with a command
-        params = ('{"name": "My Docker", "image": "ubuntu",'
-                  '"command": "env",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
-        response = self.app.post('/v1/containers',
-                                 params=params,
-                                 content_type='application/json')
-        self.assertEqual(201, response.status_int)
-        # get all containers
-        container = objects.Container.list(self.context)[0]
-        container.status = 'Stopped'
-        mock_container_show.return_value = container
-        response = self.app.get('/v1/containers')
-        self.assertEqual(200, response.status_int)
-        self.assertEqual(1, len(response.json))
-        c = response.json['containers'][0]
-        self.assertIsNotNone(c.get('uuid'))
-        self.assertEqual('My Docker', c.get('name'))
-        self.assertEqual('env', c.get('command'))
-        self.assertEqual('Stopped', c.get('status'))
-        self.assertIsNone(c.get('memory'))
+        self.assertEqual({}, c.get('environment'))
 
     @patch('magnum.conductor.api.API.container_create')
     def test_create_container_without_name(self, mock_container_create):
         # No name param
         params = ('{"image": "ubuntu", "command": "env", "memory": "512m",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
+                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e",'
+                  '"environment": {"key1": "val1", "key2": "val2"}}')
         self.assertRaises(AppError, self.app.post, '/v1/containers',
                           params=params, content_type='application/json')
         self.assertTrue(mock_container_create.not_called)
@@ -206,8 +251,8 @@ class TestContainerController(api_base.FunctionalTest):
         response = self.app.get('/v1/containers')
 
         mock_container_list.assert_called_once_with(mock.ANY,
-                                                    1000, None, sort_dir='asc',
-                                                    sort_key='id')
+                                                    1000, None, 'id', 'asc',
+                                                    filters=None)
         self.assertEqual(200, response.status_int)
         actual_containers = response.json['containers']
         self.assertEqual(1, len(actual_containers))
@@ -263,6 +308,7 @@ class TestContainerController(api_base.FunctionalTest):
         self.assertIn('image', actual_containers[0])
         self.assertIn('command', actual_containers[0])
         self.assertIn('memory', actual_containers[0])
+        self.assertIn('environment', actual_containers[0])
 
     @patch('magnum.conductor.api.API.container_show')
     @patch('magnum.objects.Container.list')
@@ -276,8 +322,8 @@ class TestContainerController(api_base.FunctionalTest):
         response = self.app.get('/v1/containers')
 
         mock_container_list.assert_called_once_with(mock.ANY,
-                                                    1000, None, sort_dir='asc',
-                                                    sort_key='id')
+                                                    1000, None, 'id', 'asc',
+                                                    filters=None)
         self.assertEqual(200, response.status_int)
         actual_containers = response.json['containers']
         self.assertEqual(1, len(actual_containers))
@@ -286,6 +332,29 @@ class TestContainerController(api_base.FunctionalTest):
 
         self.assertEqual(fields.ContainerStatus.UNKNOWN,
                          actual_containers[0].get('status'))
+
+    @patch('magnum.conductor.api.API.container_show')
+    @patch('magnum.api.utils.get_resource')
+    @patch('magnum.objects.Container.list')
+    def test_get_all_containers_with_bay_ident(self, mock_container_list,
+                                               mock_retrive_bay_uuid,
+                                               mock_container_show):
+        test_container = utils.get_test_container()
+        containers = [objects.Container(self.context, **test_container)]
+        mock_container_list.return_value = containers
+        mock_retrive_bay_uuid.return_value.uuid = '12'
+        mock_container_show.return_value = containers[0]
+
+        response = self.app.get('/v1/containers/?bay_ident=12')
+
+        mock_container_list.assert_called_once_with(mock.ANY,
+                                                    1000, None, 'id', 'asc',
+                                                    filters={'bay_uuid': '12'})
+        self.assertEqual(200, response.status_int)
+        actual_containers = response.json['containers']
+        self.assertEqual(1, len(actual_containers))
+        self.assertEqual(test_container['uuid'],
+                         actual_containers[0].get('uuid'))
 
     @patch('magnum.conductor.api.API.container_show')
     @patch('magnum.objects.Container.get_by_uuid')
@@ -569,45 +638,119 @@ class TestContainerController(api_base.FunctionalTest):
 class TestContainerEnforcement(api_base.FunctionalTest):
 
     def _common_policy_check(self, rule, func, *arg, **kwarg):
-        self.policy.set_rules({rule: 'project:non_fake'})
-        exc = self.assertRaises(policy.PolicyNotAuthorized,
-                                func, *arg, **kwarg)
-        self.assertTrue(exc.message.startswith(rule))
-        self.assertTrue(exc.message.endswith('disallowed by policy'))
+        self.policy.set_rules({rule: 'project_id:non_fake'})
+        response = func(*arg, **kwarg)
+        self.assertEqual(403, response.status_int)
+        self.assertEqual('application/json', response.content_type)
+        self.assertTrue(
+            "Policy doesn't allow %s to be performed." % rule,
+            response.json['errors'][0]['detail'])
 
     def test_policy_disallow_get_all(self):
         self._common_policy_check(
-            'container:get_all', self.get_json, '/containers')
+            'container:get_all', self.get_json, '/containers',
+            expect_errors=True)
 
     def test_policy_disallow_get_one(self):
+        container = obj_utils.create_test_container(self.context)
         self._common_policy_check(
-            'container:get', self.get_json, '/containers/111-222-333')
+            'container:get', self.get_json,
+            '/containers/%s' % container.uuid,
+            expect_errors=True)
 
     def test_policy_disallow_detail(self):
         self._common_policy_check(
             'container:detail',
             self.get_json,
-            '/containers/111-222-333/detail')
+            '/containers/%s/detail' % comm_utils.generate_uuid(),
+            expect_errors=True)
 
     def test_policy_disallow_update(self):
-        test_container = utils.get_test_container()
-        container_uuid = test_container.get('uuid')
+        bay = obj_utils.create_test_bay(self.context)
+        container = obj_utils.create_test_container(self.context,
+                                                    bay_uuid=bay.uuid)
         params = [{'path': '/name',
                    'value': 'new_name',
                    'op': 'replace'}]
         self._common_policy_check(
             'container:update', self.app.patch_json,
-            '/v1/containers/%s' % container_uuid, params)
+            '/v1/containers/%s' % container.uuid, params,
+            expect_errors=True)
 
     def test_policy_disallow_create(self):
-        params = ('{"name": "' + 'i' * 256 + '", "image": "ubuntu",'
+        baymodel = obj_utils.create_test_baymodel(self.context)
+        bay = obj_utils.create_test_bay(self.context,
+                                        baymodel_id=baymodel.uuid)
+        params = ('{"name": "My Docker", "image": "ubuntu",'
                   '"command": "env", "memory": "512m",'
-                  '"bay_uuid": "fff114da-3bfa-4a0f-a123-c0dffad9718e"}')
+                  '"bay_uuid": "%s"}' % bay.uuid)
 
         self._common_policy_check(
-            'container:create', self.app.post, '/v1/containers', params)
+            'container:create', self.app.post, '/v1/containers', params=params,
+            content_type='application/json',
+            expect_errors=True)
 
     def test_policy_disallow_delete(self):
+        bay = obj_utils.create_test_bay(self.context)
+        container = obj_utils.create_test_container(self.context,
+                                                    bay_uuid=bay.uuid)
         self._common_policy_check(
             'container:delete', self.app.delete,
-            '/v1/containers/%s' % comm_utils.generate_uuid())
+            '/v1/containers/%s' % container.uuid,
+            expect_errors=True)
+
+    def _owner_check(self, rule, func, *args, **kwargs):
+        self.policy.set_rules({rule: "user_id:%(user_id)s"})
+        response = func(*args, **kwargs)
+        self.assertEqual(403, response.status_int)
+        self.assertEqual('application/json', response.content_type)
+        self.assertTrue(
+            "Policy doesn't allow %s to be performed." % rule,
+            response.json['errors'][0]['detail'])
+
+    def test_policy_only_owner_get_one(self):
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        self._owner_check("container:get", self.get_json,
+                          '/containers/%s' % container.uuid,
+                          expect_errors=True)
+
+    def test_policy_only_owner_update(self):
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        self._owner_check(
+            "container:update", self.patch_json,
+            '/containers/%s' % container.uuid,
+            [{'path': '/name', 'value': "new_name", 'op': 'replace'}],
+            expect_errors=True)
+
+    def test_policy_only_owner_delete(self):
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        self._owner_check(
+            "container:delete", self.delete,
+            '/containers/%s' % container.uuid,
+            expect_errors=True)
+
+    def test_policy_only_owner_logs(self):
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        self._owner_check("container:logs", self.get_json,
+                          '/containers/logs/%s' % container.uuid,
+                          expect_errors=True)
+
+    def test_policy_only_owner_execute(self):
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        self._owner_check("container:execute", self.put_json,
+                          '/containers/execute/%s/ls' % container.uuid,
+                          {}, expect_errors=True)
+
+    def test_policy_only_owner_actions(self):
+        actions = ['start', 'stop', 'reboot', 'pause', 'unpause']
+        container = obj_utils.create_test_container(self.context,
+                                                    user_id='another')
+        for action in actions:
+            self._owner_check('container:%s' % action, self.put_json,
+                              '/containers/%s/%s' % (action, container.uuid),
+                              {}, expect_errors=True)

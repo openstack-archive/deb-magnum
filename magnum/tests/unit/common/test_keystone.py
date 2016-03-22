@@ -49,7 +49,8 @@ class KeystoneClientTest(base.BaseTestCase):
         ks_client.client
         self.assertIsNotNone(ks_client._client)
         mock_ks.assert_called_once_with(token='abcd1234',
-                                        auth_url='http://server.test:5000/v3')
+                                        auth_url='http://server.test:5000/v3',
+                                        endpoint='http://server.test:5000/v3')
 
     def test_client_with_no_credentials(self, mock_ks):
         self.ctx.auth_token = None
@@ -65,6 +66,7 @@ class KeystoneClientTest(base.BaseTestCase):
         self.assertIsNotNone(ks_client._client)
         mock_ks.assert_called_once_with(auth_ref={'version': 'v2.0'},
                                         auth_url='http://server.test:5000/v3',
+                                        endpoint='http://server.test:5000/v3',
                                         token='abcd1234')
 
     def test_client_with_v3_auth_token_info(self, mock_ks):
@@ -75,6 +77,7 @@ class KeystoneClientTest(base.BaseTestCase):
         self.assertIsNotNone(ks_client._client)
         mock_ks.assert_called_once_with(auth_ref={'version': 'v3'},
                                         auth_url='http://server.test:5000/v3',
+                                        endpoint='http://server.test:5000/v3',
                                         token='abcd1234')
 
     def test_client_with_invalid_auth_token_info(self, mock_ks):
@@ -108,25 +111,58 @@ class KeystoneClientTest(base.BaseTestCase):
         ks_client = keystone.KeystoneClientV3(self.ctx)
         self.assertIsNone(ks_client.delete_trust(trust_id='atrust123'))
 
-    def test_create_trust(self, mock_ks):
+    def test_create_trust_with_all_roles(self, mock_ks):
         mock_ks.return_value.auth_ref.user_id = '123456'
         mock_ks.return_value.auth_ref.project_id = '654321'
 
+        self.ctx.roles = ['role1', 'role2']
         ks_client = keystone.KeystoneClientV3(self.ctx)
-        ks_client.create_trust(trustee_user='888888',
-                               role_names='xxxx')
+
+        ks_client.create_trust(trustee_user='888888')
 
         mock_ks.return_value.trusts.create.assert_called_once_with(
             trustor_user='123456', project='654321',
-            trustee_user='888888', role_names='xxxx',
+            trustee_user='888888', role_names=['role1', 'role2'],
             impersonation=True)
 
-    @mock.patch.object(keystone.KeystoneClientV3,
-                       'create_trust')
-    def test_create_trust_to_admin(self, mock_create_trust, mock_ks):
-        mock_ks.return_value.auth_ref.user_id = '777777'
+    def test_create_trust_with_limit_roles(self, mock_ks):
+        mock_ks.return_value.auth_ref.user_id = '123456'
+        mock_ks.return_value.auth_ref.project_id = '654321'
 
+        self.ctx.roles = ['role1', 'role2']
         ks_client = keystone.KeystoneClientV3(self.ctx)
-        ks_client.create_trust_to_admin(role_names='xxxx')
 
-        mock_create_trust.assert_called_once_with('777777', 'xxxx', True)
+        cfg.CONF.set_override('roles', ['role3'], group='trust')
+        ks_client.create_trust(trustee_user='888888')
+
+        mock_ks.return_value.trusts.create.assert_called_once_with(
+            trustor_user='123456', project='654321',
+            trustee_user='888888', role_names=['role3'],
+            impersonation=True)
+
+    def test_get_validate_region_name(self, mock_ks):
+        key = 'region_name'
+        val = 'RegionOne'
+        cfg.CONF.set_override(key, val, 'cinder_client')
+        mock_region = mock.MagicMock()
+        mock_region.id = 'RegionOne'
+        mock_ks.return_value.regions.list.return_value = [mock_region]
+        ks_client = keystone.KeystoneClientV3(self.ctx)
+        region_name = ks_client.get_validate_region_name(val)
+        self.assertEqual('RegionOne', region_name)
+
+    def test_get_validate_region_name_not_found(self, mock_ks):
+        key = 'region_name'
+        val = 'region123'
+        cfg.CONF.set_override(key, val, 'cinder_client')
+        ks_client = keystone.KeystoneClientV3(self.ctx)
+        self.assertRaises(exception.InvalidParameterValue,
+                          ks_client.get_validate_region_name, val)
+
+    def test_get_validate_region_name_is_None(self, mock_ks):
+        key = 'region_name'
+        val = None
+        cfg.CONF.set_override(key, val, 'cinder_client')
+        ks_client = keystone.KeystoneClientV3(self.ctx)
+        self.assertRaises(exception.InvalidParameterValue,
+                          ks_client.get_validate_region_name, val)

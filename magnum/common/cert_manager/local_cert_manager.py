@@ -89,7 +89,7 @@ class CertManager(cert_manager.CertManager):
         cert_ref = str(uuid.uuid4())
         filename_base = os.path.join(CONF.certificates.storage_path, cert_ref)
 
-        LOG.warn(_LW(
+        LOG.warning(_LW(
             "Storing certificate data on the local filesystem. "
             "CertManager type 'local' should be used for testing purpose."
         ))
@@ -113,7 +113,7 @@ class CertManager(cert_manager.CertManager):
                     pass_file.write(private_key_passphrase)
         except IOError as ioe:
             LOG.error(_LE("Failed to store certificate."))
-            raise exception.CertificateStorageException(msg=ioe.message)
+            raise exception.CertificateStorageException(msg=str(ioe))
 
         return cert_ref
 
@@ -127,7 +127,7 @@ class CertManager(cert_manager.CertManager):
                  representation of the certificate data
         :raises CertificateStorageException: if certificate retrieval fails
         """
-        LOG.warn(_LW(
+        LOG.warning(_LW(
             "Loading certificate {0} from the local filesystem. "
             "CertManager type 'local' should be used for testing purpose."
         ).format(cert_ref))
@@ -168,7 +168,7 @@ class CertManager(cert_manager.CertManager):
                     cert_data['intermediates'] = int_file.read()
         except IOError as ioe:
             LOG.error(_LE("Failed to read certificate."))
-            raise exception.CertificateStorageException(msg=ioe.message)
+            raise exception.CertificateStorageException(msg=str(ioe))
 
         try:
             if path.isfile(filename_pkp):
@@ -176,7 +176,7 @@ class CertManager(cert_manager.CertManager):
                     cert_data['private_key_passphrase'] = pass_file.read()
         except IOError as ioe:
             LOG.error(_LE("Failed to read certificate."))
-            raise exception.CertificateStorageException(msg=ioe.message)
+            raise exception.CertificateStorageException(msg=str(ioe))
 
         return Cert(**cert_data)
 
@@ -188,7 +188,7 @@ class CertManager(cert_manager.CertManager):
 
         :raises CertificateStorageException: if certificate deletion fails
         """
-        LOG.warn(_LW(
+        LOG.warning(_LW(
             "Deleting certificate {0} from the local filesystem. "
             "CertManager type 'local' should be used for testing purpose."
         ).format(cert_ref))
@@ -211,4 +211,4 @@ class CertManager(cert_manager.CertManager):
             LOG.error(_LE(
                 "Failed to delete certificate {0}."
             ).format(cert_ref))
-            raise exception.CertificateStorageException(msg=ioe.message)
+            raise exception.CertificateStorageException(msg=str(ioe))

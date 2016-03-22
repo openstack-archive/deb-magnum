@@ -19,15 +19,18 @@ from pecan import rest
 import wsme
 from wsme import types as wtypes
 
+from magnum.api import attr_validator
 from magnum.api.controllers import base
 from magnum.api.controllers import link
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
 from magnum.api import expose
+from magnum.api import utils as api_utils
+from magnum.api.validation import validate_bay_properties
 from magnum.common import exception
 from magnum.common import policy
 from magnum import objects
+from magnum.objects import fields
 
 
 class BayPatchType(types.JsonPatchType):
@@ -40,7 +43,9 @@ class BayPatchType(types.JsonPatchType):
     def internal_attrs():
         internal_attrs = ['/api_address', '/node_addresses',
                           '/master_addresses', '/stack_id',
-                          '/ca_cert_ref', '/magnum_cert_ref']
+                          '/ca_cert_ref', '/magnum_cert_ref',
+                          '/trust_id', '/trustee_user_name',
+                          '/trustee_password', '/trustee_user_id']
         return types.JsonPatchType.internal_attrs() + internal_attrs
 
 
@@ -59,7 +64,7 @@ class Bay(base.APIBase):
     def _set_baymodel_id(self, value):
         if value and self._baymodel_id != value:
             try:
-                baymodel = api_utils.get_rpc_resource('BayModel', value)
+                baymodel = api_utils.get_resource('BayModel', value)
                 self._baymodel_id = baymodel.uuid
             except exception.BayModelNotFound as e:
                 # Change error code because 404 (NotFound) is inappropriate
@@ -77,21 +82,24 @@ class Bay(base.APIBase):
 
     baymodel_id = wsme.wsproperty(wtypes.text, _get_baymodel_id,
                                   _set_baymodel_id, mandatory=True)
-    """The bay model UUID or id"""
+    """The baymodel UUID"""
 
     node_count = wsme.wsattr(wtypes.IntegerType(minimum=1), default=1)
-    """The node count for this bay. Set to 1 for no node_count"""
+    """The node count for this bay. Default to 1 if not set"""
 
     master_count = wsme.wsattr(wtypes.IntegerType(minimum=1), default=1)
-    """The number of master nodes for this bay. Set to 1 for no master_count"""
+    """The number of master nodes for this bay. Default to 1 if not set"""
 
     bay_create_timeout = wsme.wsattr(wtypes.IntegerType(minimum=0), default=0)
-    """Timeout for creating the bay in minutes. Set to 0 for no timeout."""
+    """Timeout for creating the bay in minutes. Default to 0 if not set"""
 
     links = wsme.wsattr([link.Link], readonly=True)
     """A list containing a self link and associated bay links"""
 
-    status = wtypes.text
+    stack_id = wsme.wsattr(wtypes.text, readonly=True)
+    """Stack id of the heat stack"""
+
+    status = wtypes.Enum(str, *fields.BayStatus.ALL)
     """Status of the bay from the heat stack"""
 
     status_reason = wtypes.text
@@ -125,7 +133,8 @@ class Bay(base.APIBase):
         if not expand:
             bay.unset_fields_except(['uuid', 'name', 'baymodel_id',
                                      'node_count', 'status',
-                                     'bay_create_timeout', 'master_count'])
+                                     'bay_create_timeout', 'master_count',
+                                     'stack_id'])
 
         bay.links = [link.Link.make_link('self', url,
                                          'bays', bay.uuid),
@@ -147,7 +156,8 @@ class Bay(base.APIBase):
                      node_count=2,
                      master_count=1,
                      bay_create_timeout=15,
-                     status="CREATE_COMPLETE",
+                     stack_id='49dc23f5-ffc9-40c3-9d34-7be7f9e34d63',
+                     status=fields.BayStatus.CREATE_COMPLETE,
                      status_reason="CREATE completed successfully",
                      api_address='172.24.4.3',
                      node_addresses=['172.24.4.4', '172.24.4.5'],
@@ -201,10 +211,9 @@ class BaysController(rest.RestController):
             marker_obj = objects.Bay.get_by_uuid(pecan.request.context,
                                                  marker)
 
-        bays = pecan.request.rpcapi.bay_list(
-            pecan.request.context, limit,
-            marker_obj, sort_key=sort_key,
-            sort_dir=sort_dir)
+        bays = objects.Bay.list(pecan.request.context, limit,
+                                marker_obj, sort_key=sort_key,
+                                sort_dir=sort_dir)
 
         return BayCollection.convert_with_links(bays, limit,
                                                 url=resource_url,
@@ -212,7 +221,6 @@ class BaysController(rest.RestController):
                                                 sort_key=sort_key,
                                                 sort_dir=sort_dir)
 
-    @policy.enforce_wsgi("bay")
     @expose.expose(BayCollection, types.uuid, int, wtypes.text,
                    wtypes.text)
     def get_all(self, marker=None, limit=None, sort_key='id',
@@ -224,10 +232,12 @@ class BaysController(rest.RestController):
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         """
+        context = pecan.request.context
+        policy.enforce(context, 'bay:get_all',
+                       action='bay:get_all')
         return self._get_bays_collection(marker, limit, sort_key,
                                          sort_dir)
 
-    @policy.enforce_wsgi("bay")
     @expose.expose(BayCollection, types.uuid, int, wtypes.text,
                    wtypes.text)
     def detail(self, marker=None, limit=None, sort_key='id',
@@ -239,7 +249,11 @@ class BaysController(rest.RestController):
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         """
-        # NOTE(lucasagomes): /detail should only work agaist collections
+        context = pecan.request.context
+        policy.enforce(context, 'bay:detail',
+                       action='bay:detail')
+
+        # NOTE(lucasagomes): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "bays":
             raise exception.HTTPNotFound
@@ -250,31 +264,35 @@ class BaysController(rest.RestController):
                                          sort_key, sort_dir, expand,
                                          resource_url)
 
-    @policy.enforce_wsgi("bay", "get")
     @expose.expose(Bay, types.uuid_or_name)
     def get_one(self, bay_ident):
         """Retrieve information about the given bay.
 
         :param bay_ident: UUID of a bay or logical name of the bay.
         """
-        rpc_bay = api_utils.get_rpc_resource('Bay', bay_ident)
+        context = pecan.request.context
+        bay = api_utils.get_resource('Bay', bay_ident)
+        policy.enforce(context, 'bay:get', bay,
+                       action='bay:get')
 
-        return Bay.convert_with_links(rpc_bay)
+        return Bay.convert_with_links(bay)
 
-    @policy.enforce_wsgi("bay", "create")
     @expose.expose(Bay, body=Bay, status_code=201)
     def post(self, bay):
         """Create a new bay.
 
         :param bay: a bay within the request body.
         """
-        bay_dict = bay.as_dict()
         context = pecan.request.context
+        policy.enforce(context, 'bay:create',
+                       action='bay:create')
+        baymodel = objects.BayModel.get_by_uuid(context, bay.baymodel_id)
+        attr_validator.validate_os_resources(context, baymodel.as_dict())
+        bay_dict = bay.as_dict()
         bay_dict['project_id'] = context.project_id
         bay_dict['user_id'] = context.user_id
-        # NOTE(suro-patz): Apply default node_count is 1, None -> 1
-        if bay_dict.get('node_count', None) is None:
-            bay_dict['node_count'] = 1
+        if bay_dict.get('name') is None:
+            bay_dict['name'] = None
 
         new_bay = objects.Bay(context, **bay_dict)
         res_bay = pecan.request.rpcapi.bay_create(new_bay,
@@ -284,7 +302,6 @@ class BaysController(rest.RestController):
         pecan.response.location = link.build_url('bays', res_bay.uuid)
         return Bay.convert_with_links(res_bay)
 
-    @policy.enforce_wsgi("bay", "update")
     @wsme.validate(types.uuid, [BayPatchType])
     @expose.expose(Bay, types.uuid_or_name, body=[BayPatchType])
     def patch(self, bay_ident, patch):
@@ -293,35 +310,44 @@ class BaysController(rest.RestController):
         :param bay_ident: UUID or logical name of a bay.
         :param patch: a json PATCH document to apply to this bay.
         """
-        rpc_bay = api_utils.get_rpc_resource('Bay', bay_ident)
+        context = pecan.request.context
+        bay = api_utils.get_resource('Bay', bay_ident)
+        policy.enforce(context, 'bay:update', bay,
+                       action='bay:update')
         try:
-            bay_dict = rpc_bay.as_dict()
-            bay = Bay(**api_utils.apply_jsonpatch(bay_dict, patch))
+            bay_dict = bay.as_dict()
+            new_bay = Bay(**api_utils.apply_jsonpatch(bay_dict, patch))
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
 
         # Update only the fields that have changed
         for field in objects.Bay.fields:
             try:
-                patch_val = getattr(bay, field)
+                patch_val = getattr(new_bay, field)
             except AttributeError:
                 # Ignore fields that aren't exposed in the API
                 continue
             if patch_val == wtypes.Unset:
                 patch_val = None
-            if rpc_bay[field] != patch_val:
-                rpc_bay[field] = patch_val
+            if bay[field] != patch_val:
+                bay[field] = patch_val
 
-        res_bay = pecan.request.rpcapi.bay_update(rpc_bay)
+        delta = bay.obj_what_changed()
+
+        validate_bay_properties(delta)
+
+        res_bay = pecan.request.rpcapi.bay_update(bay)
         return Bay.convert_with_links(res_bay)
 
-    @policy.enforce_wsgi("bay", "delete")
     @expose.expose(None, types.uuid_or_name, status_code=204)
     def delete(self, bay_ident):
         """Delete a bay.
 
         :param bay_ident: UUID of a bay or logical name of the bay.
         """
-        rpc_bay = api_utils.get_rpc_resource('Bay', bay_ident)
+        context = pecan.request.context
+        bay = api_utils.get_resource('Bay', bay_ident)
+        policy.enforce(context, 'bay:delete', bay,
+                       action='bay:delete')
 
-        pecan.request.rpcapi.bay_delete(rpc_bay.uuid)
+        pecan.request.rpcapi.bay_delete(bay.uuid)

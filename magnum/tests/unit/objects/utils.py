@@ -14,6 +14,8 @@
 #    under the License.
 """Magnum object test utilities."""
 
+
+from magnum.common import exception
 from magnum import objects
 from magnum.tests.unit.db import utils as db_utils
 
@@ -41,7 +43,10 @@ def create_test_baymodel(context, **kw):
     attributes.
     """
     baymodel = get_test_baymodel(context, **kw)
-    baymodel.create()
+    try:
+        baymodel.create()
+    except exception.BayModelAlreadyExists:
+        baymodel = objects.BayModel.get(context, baymodel.uuid)
     return baymodel
 
 
@@ -68,6 +73,8 @@ def create_test_bay(context, **kw):
     attributes.
     """
     bay = get_test_bay(context, **kw)
+    create_test_baymodel(context, uuid=bay['baymodel_id'],
+                         coe=kw.get('coe', 'swarm'))
     bay.create()
     return bay
 
@@ -95,7 +102,7 @@ def create_test_pod(context, **kw):
     attributes.
     """
     pod = get_test_pod(context, **kw)
-    pod.create()
+    pod.manifest = '{"foo": "bar"}'
     return pod
 
 
@@ -122,7 +129,7 @@ def create_test_service(context, **kw):
     attributes.
     """
     service = get_test_service(context, **kw)
-    service.create()
+    service.manifest = '{"foo": "bar"}'
     return service
 
 
@@ -151,33 +158,6 @@ def create_test_rc(context, **kw):
     rc = get_test_rc(context, **kw)
     rc.manifest = '{"foo": "bar"}'
     return rc
-
-
-def get_test_node(context, **kw):
-    """Return a Node object with appropriate attributes.
-
-    NOTE: The object leaves the attributes marked as changed, such
-    that a create() could be used to commit it to the DB.
-    """
-    db_node = db_utils.get_test_node(**kw)
-    # Let DB generate ID if it isn't specified explicitly
-    if 'id' not in kw:
-        del db_node['id']
-    node = objects.Node(context)
-    for key in db_node:
-        setattr(node, key, db_node[key])
-    return node
-
-
-def create_test_node(context, **kw):
-    """Create and return a test Node object.
-
-    Create a node in the DB and return a Node object with appropriate
-    attributes.
-    """
-    node = get_test_node(context, **kw)
-    node.create()
-    return node
 
 
 def get_test_x509keypair(context, **kw):
@@ -218,3 +198,27 @@ def get_test_magnum_service_object(context, **kw):
     for key in db_magnum_service:
         setattr(magnum_service, key, db_magnum_service[key])
     return magnum_service
+
+
+def create_test_container(context, **kw):
+    """Create and return a test container object.
+
+    Create a container in the DB and return a container object with
+    appropriate attributes.
+    """
+    container = get_test_container(context, **kw)
+    container.create()
+    return container
+
+
+def get_test_container(context, **kw):
+    """Return a test container object with appropriate attributes.
+
+    NOTE: The object leaves the attributes marked as changed, such
+    that a create() could be used to commit it to the DB.
+    """
+    db_container = db_utils.get_test_container(**kw)
+    container = objects.Container(context)
+    for key in db_container:
+        setattr(container, key, db_container[key])
+    return container

@@ -122,7 +122,7 @@ class TemplateDefinitionTestCase(base.TestCase):
         ]
 
         mock_stack = mock.MagicMock()
-        mock_stack.outputs = heat_outputs
+        mock_stack.to_dict.return_value = {'outputs': heat_outputs}
 
         output = tdef.OutputMapping('key1')
         value = output.get_output_value(mock_stack)
@@ -133,6 +133,12 @@ class TemplateDefinitionTestCase(base.TestCase):
         self.assertEqual(["value2", "value3"], value)
 
         output = tdef.OutputMapping('key3')
+        value = output.get_output_value(mock_stack)
+        self.assertIsNone(value)
+
+        # verify stack with no 'outputs' attribute
+        mock_stack.to_dict.return_value = {}
+        output = tdef.OutputMapping('key1')
         value = output.get_output_value(mock_stack)
         self.assertIsNone(value)
 
@@ -200,7 +206,6 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
             'flannel_network_cidr': flannel_cidr,
             'flannel_use_vxlan': flannel_subnet,
             'flannel_network_subnetlen': flannel_vxlan,
-            'auth_url': 'http://192.168.10.10:5000/v2',
             'username': 'fake_user',
             'tenant_name': 'fake_tenant',
             'magnum_url': mock_osc.magnum_url.return_value,
@@ -252,7 +257,6 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
             'flannel_network_cidr': flannel_cidr,
             'flannel_use_vxlan': flannel_subnet,
             'flannel_network_subnetlen': flannel_vxlan,
-            'auth_url': 'http://192.168.10.10:5000/v2',
             'username': 'fake_user',
             'tenant_name': 'fake_tenant',
             'magnum_url': mock_osc.magnum_url.return_value,
@@ -281,6 +285,21 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
         mock_get.assert_called_once_with('http://etcd/test?size=10')
         self.assertEqual(expected_discovery_url, mock_bay.discovery_url)
         self.assertEqual(expected_discovery_url, discovery_url)
+
+    @mock.patch('requests.get')
+    def test_k8s_get_discovery_url_fail(self, mock_get):
+        cfg.CONF.set_override('etcd_discovery_service_endpoint_format',
+                              'http://etcd/test?size=%(size)d',
+                              group='bay')
+        mock_get.side_effect = Exception()
+        mock_bay = mock.MagicMock()
+        mock_bay.master_count = 10
+        mock_bay.discovery_url = None
+
+        k8s_def = tdef.AtomicK8sTemplateDefinition()
+
+        self.assertRaises(exception.GetDiscoveryUrlFailed,
+                          k8s_def.get_discovery_url, mock_bay)
 
     def test_k8s_get_heat_param(self):
         k8s_def = tdef.AtomicK8sTemplateDefinition()
@@ -315,7 +334,7 @@ class AtomicK8sTemplateDefinitionTestCase(base.TestCase):
              "output_key": 'api_address'},
         ]
         mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
+        mock_stack.to_dict.return_value = {'outputs': outputs}
         mock_bay = mock.MagicMock()
         mock_baymodel = mock.MagicMock()
         mock_baymodel.tls_disabled = tls
@@ -477,7 +496,7 @@ class AtomicSwarmTemplateDefinitionTestCase(base.TestCase):
              "output_key": "swarm_nodes"},
         ]
         mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
+        mock_stack.to_dict.return_value = {'outputs': outputs}
         mock_bay = mock.MagicMock()
         mock_baymodel = mock.MagicMock()
 
@@ -489,11 +508,50 @@ class AtomicSwarmTemplateDefinitionTestCase(base.TestCase):
 
 class UbuntuMesosTemplateDefinitionTestCase(base.TestCase):
 
+    @mock.patch('magnum.common.clients.OpenStackClients')
+    @mock.patch('magnum.conductor.template_definition.BaseTemplateDefinition'
+                '.get_params')
+    @mock.patch('magnum.conductor.template_definition.TemplateDefinition'
+                '.get_output')
+    def test_mesos_get_params(self, mock_get_output, mock_get_params,
+                              mock_osc_class):
+        mock_context = mock.MagicMock()
+        mock_context.auth_url = 'http://192.168.10.10:5000/v3'
+        mock_context.user_name = 'mesos_user'
+        mock_context.tenant = 'admin'
+        mock_context.domain_name = 'domainname'
+        mock_baymodel = mock.MagicMock()
+        mock_baymodel.tls_disabled = False
+        rexray_preempt = mock_baymodel.labels.get('rexray_preempt')
+        mock_bay = mock.MagicMock()
+        mock_bay.uuid = 'bay-xx-xx-xx-xx'
+        del mock_bay.stack_id
+        mock_osc = mock.MagicMock()
+        mock_osc.cinder_region_name.return_value = 'RegionOne'
+        mock_osc_class.return_value = mock_osc
+
+        mesos_def = tdef.UbuntuMesosTemplateDefinition()
+
+        mesos_def.get_params(mock_context, mock_baymodel, mock_bay)
+
+        expected_kwargs = {'extra_params': {
+            'region_name': mock_osc.cinder_region_name.return_value,
+            'auth_url': 'http://192.168.10.10:5000/v3',
+            'username': 'mesos_user',
+            'tenant_name': 'admin',
+            'domain_name': 'domainname',
+            'rexray_preempt': rexray_preempt}}
+        mock_get_params.assert_called_once_with(mock_context, mock_baymodel,
+                                                mock_bay, **expected_kwargs)
+
     def test_mesos_get_heat_param(self):
         mesos_def = tdef.UbuntuMesosTemplateDefinition()
 
         heat_param = mesos_def.get_heat_param(bay_attr='node_count')
         self.assertEqual('number_of_slaves', heat_param)
+
+        heat_param = mesos_def.get_heat_param(bay_attr='master_count')
+        self.assertEqual('number_of_masters', heat_param)
 
     def test_update_outputs(self):
         mesos_def = tdef.UbuntuMesosTemplateDefinition()
@@ -520,7 +578,7 @@ class UbuntuMesosTemplateDefinitionTestCase(base.TestCase):
              "output_key": "mesos_slaves"},
         ]
         mock_stack = mock.MagicMock()
-        mock_stack.outputs = outputs
+        mock_stack.to_dict.return_value = {'outputs': outputs}
         mock_bay = mock.MagicMock()
         mock_baymodel = mock.MagicMock()
 

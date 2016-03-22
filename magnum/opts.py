@@ -16,7 +16,6 @@
 import itertools
 
 import magnum.api.app
-import magnum.api.auth
 import magnum.api.validation
 import magnum.common.cert_manager
 from magnum.common.cert_manager import local_cert_manager
@@ -35,8 +34,7 @@ import magnum.db
 def list_opts():
     return [
         ('DEFAULT',
-         itertools.chain(magnum.api.auth.AUTH_OPTS,
-                         magnum.common.paths.PATH_OPTS,
+         itertools.chain(magnum.common.paths.PATH_OPTS,
                          magnum.common.utils.UTILS_OPTS,
                          magnum.common.rpc_service.periodic_opts,
                          magnum.common.service.service_opts,
@@ -46,11 +44,14 @@ def list_opts():
         ('conductor', magnum.conductor.config.SERVICE_OPTS),
         ('database', magnum.db.sql_opts),
         ('docker', magnum.common.docker_utils.docker_opts),
+        ('trust', magnum.common.keystone.trust_opts),
         ('magnum_client', magnum.common.clients.magnum_client_opts),
         ('heat_client', magnum.common.clients.heat_client_opts),
         ('glance_client', magnum.common.clients.glance_client_opts),
         ('barbican_client', magnum.common.clients.barbican_client_opts),
+        ('cinder_client', magnum.common.clients.cinder_client_opts),
         ('nova_client', magnum.common.clients.nova_client_opts),
+        ('neutron_client', magnum.common.clients.neutron_client_opts),
         ('x509', magnum.common.x509.config.x509_opts),
         ('bay_heat', magnum.conductor.handlers.bay_conductor.bay_heat_opts),
         ('certificates',

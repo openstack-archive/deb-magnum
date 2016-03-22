@@ -41,6 +41,13 @@ from magnum.i18n import _
 from magnum.i18n import _LE
 from magnum.i18n import _LW
 
+
+# Default symbols to use for passwords. Avoids visually confusing characters.
+# ~6 bits per symbol
+DEFAULT_PASSWORD_SYMBOLS = ['23456789',  # Removed: 0,1
+                            'ABCDEFGHJKLMNPQRSTUVWXYZ',   # Removed: I, O
+                            'abcdefghijkmnopqrstuvwxyz']  # Removed: l
+
 UTILS_OPTS = [
     cfg.StrOpt('rootwrap_config',
                default="/etc/magnum/rootwrap.conf",
@@ -48,6 +55,9 @@ UTILS_OPTS = [
                     'running commands as root.'),
     cfg.StrOpt('tempdir',
                help='Explicitly specify the temporary working directory.'),
+    cfg.ListOpt('password_symbols',
+                default=DEFAULT_PASSWORD_SYMBOLS,
+                help='Symbols to use for passwords')
 ]
 
 CONF = cfg.CONF
@@ -99,8 +109,8 @@ def execute(*cmd, **kwargs):
     result = processutils.execute(*cmd, **kwargs)
     LOG.debug('Execution completed, command line is "%s"',
               ' '.join(map(str, cmd)))
-    LOG.debug('Command stdout is: "%s"' % result[0])
-    LOG.debug('Command stderr is: "%s"' % result[1])
+    LOG.debug('Command stdout is: "%s"', result[0])
+    LOG.debug('Command stderr is: "%s"', result[1])
     return result
 
 
@@ -145,7 +155,7 @@ def ssh_connect(connection):
         # send TCP keepalive packets every 20 seconds
         ssh.get_transport().set_keepalive(20)
     except Exception as e:
-        LOG.debug("SSH connect failed: %s" % e)
+        LOG.debug("SSH connect failed: %s", e)
         raise exception.SSHConnectFailed(host=connection.get('host'))
 
     return ssh
@@ -320,7 +330,7 @@ def read_cached_file(filename, cache_info, reload_func=None):
     """
     mtime = os.path.getmtime(filename)
     if not cache_info or mtime != cache_info.get('mtime'):
-        LOG.debug("Reloading cached file %s" % filename)
+        LOG.debug("Reloading cached file %s", filename)
         with open(filename) as fap:
             cache_info['data'] = fap.read()
         cache_info['mtime'] = mtime
@@ -344,7 +354,7 @@ def file_open(*args, **kwargs):
 def hash_file(file_like_object):
     """Generate a hash for the contents of a file."""
     checksum = hashlib.sha1()
-    for chunk in iter(lambda: file_like_object.read(32768), b''):
+    for chunk in iter(lambda: six.b(file_like_object.read(32768)), b''):
         checksum.update(chunk)
     return checksum.hexdigest()
 
@@ -406,8 +416,8 @@ def unlink_without_raise(path):
         if e.errno == errno.ENOENT:
             return
         else:
-            LOG.warn(_LW("Failed to unlink %(path)s, error: %(e)s"),
-                     {'path': path, 'e': e})
+            LOG.warning(_LW("Failed to unlink %(path)s, error: %(e)s"),
+                        {'path': path, 'e': e})
 
 
 def rmtree_without_raise(path):
@@ -415,8 +425,8 @@ def rmtree_without_raise(path):
         if os.path.isdir(path):
             shutil.rmtree(path)
     except OSError as e:
-        LOG.warn(_LW("Failed to remove dir %(path)s, error: %(e)s"),
-                 {'path': path, 'e': e})
+        LOG.warning(_LW("Failed to remove dir %(path)s, error: %(e)s"),
+                    {'path': path, 'e': e})
 
 
 def write_to_file(path, contents):
@@ -431,9 +441,9 @@ def create_link_without_raise(source, link):
         if e.errno == errno.EEXIST:
             return
         else:
-            LOG.warn(_LW("Failed to create symlink from %(source)s to %(link)s"
-                         ", error: %(e)s"),
-                     {'source': source, 'link': link, 'e': e})
+            LOG.warning(_LW("Failed to create symlink from %(source)s to "
+                            "%(link)s, error: %(e)s"),
+                        {'source': source, 'link': link, 'e': e})
 
 
 def safe_rstrip(value, chars=None):
@@ -445,8 +455,10 @@ def safe_rstrip(value, chars=None):
 
     """
     if not isinstance(value, six.string_types):
-        LOG.warn(_LW("Failed to remove trailing character. Returning original "
-                     "object. Supplied object is not a string: %s,"), value)
+        LOG.warning(_LW(
+            "Failed to remove trailing character. Returning original object. "
+            "Supplied object is not a string: %s,"
+        ), value)
         return value
 
     return value.rstrip(chars) or value
@@ -563,3 +575,40 @@ def get_memory_bytes(memory):
         return float(signed_number) * (10 ** float(suffix[1:]))
     else:
         raise exception.UnsupportedK8sMemoryFormat()
+
+
+def generate_password(length, symbolgroups=None):
+    """Generate a random password from the supplied symbol groups.
+
+    At least one symbol from each group will be included. Unpredictable
+    results if length is less than the number of symbol groups.
+
+    Believed to be reasonably secure (with a reasonable password length!)
+
+    """
+
+    if symbolgroups is None:
+        symbolgroups = CONF.password_symbols
+
+    r = random.SystemRandom()
+
+    # NOTE(jerdfelt): Some password policies require at least one character
+    # from each group of symbols, so start off with one random character
+    # from each symbol group
+    password = [r.choice(s) for s in symbolgroups]
+    # If length < len(symbolgroups), the leading characters will only
+    # be from the first length groups. Try our best to not be predictable
+    # by shuffling and then truncating.
+    r.shuffle(password)
+    password = password[:length]
+    length -= len(password)
+
+    # then fill with random characters from all symbol groups
+    symbols = ''.join(symbolgroups)
+    password.extend([r.choice(symbols) for _i in range(length)])
+
+    # finally shuffle to ensure first x characters aren't from a
+    # predictable group
+    r.shuffle(password)
+
+    return ''.join(password)

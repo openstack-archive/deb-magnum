@@ -14,11 +14,10 @@
 # limitations under the License.
 
 import functools
-import six
 
 from oslo_log import log
 from oslo_service import periodic_task
-from oslo_service import threadgroup
+import six
 
 from magnum.common import clients
 from magnum.common import context
@@ -61,32 +60,9 @@ class MagnumPeriodicTasks(periodic_task.PeriodicTasks):
 
     '''
 
-    def __init__(self, conf, binary):
-        self.magnum_service_ref = None
-        self.host = conf.host
-        self.binary = binary
+    def __init__(self, conf):
         super(MagnumPeriodicTasks, self).__init__(conf)
         self.notifier = rpc.get_notifier()
-
-    @periodic_task.periodic_task(run_immediately=True)
-    @set_context
-    def update_magnum_service(self, ctx):
-        LOG.debug('Update magnum_service')
-        if self.magnum_service_ref:
-            self.magnum_service_ref.report_state_up(ctx)
-        else:
-            self.magnum_service_ref = \
-                objects.MagnumService.get_by_host_and_binary(
-                    ctx, self.host, self.binary)
-            if self.magnum_service_ref is None:
-                magnum_service_dict = {
-                    'host': self.host,
-                    'binary': self.binary
-                }
-                self.magnum_service_ref = objects.MagnumService(
-                    ctx, **magnum_service_dict)
-                self.magnum_service_ref.create(ctx)
-            self.magnum_service_ref.report_state_up(ctx)
 
     @periodic_task.periodic_task(run_immediately=True)
     @set_context
@@ -122,8 +98,9 @@ class MagnumPeriodicTasks(periodic_task.PeriodicTasks):
                 self._sync_missing_heat_stack(bay)
 
         except Exception as e:
-            LOG.warn(_LW("Ignore error [%s] when syncing up bay status."), e,
-                     exc_info=True)
+            LOG.warning(_LW(
+                "Ignore error [%s] when syncing up bay status."
+            ), e, exc_info=True)
 
     def _sync_existing_bay(self, bay, stack):
         if bay.status != stack.stack_status:
@@ -148,7 +125,7 @@ class MagnumPeriodicTasks(periodic_task.PeriodicTasks):
         try:
             bay.destroy()
         except exception.BayNotFound:
-            LOG.info(_LI('The bay %s has been deleted by others.') % bay.uuid)
+            LOG.info(_LI('The bay %s has been deleted by others.'), bay.uuid)
         else:
             LOG.info(_LI("Bay with id %(id)s not found in heat "
                          "with stack id %(sid)s, with status_reason: "
@@ -182,9 +159,9 @@ class MagnumPeriodicTasks(periodic_task.PeriodicTasks):
             try:
                 monitor.pull_data()
             except Exception as e:
-                LOG.warn(_LW("Skip pulling data from bay %(bay)s due to "
-                             "error: %(e)s"),
-                         {'e': e, 'bay': bay.uuid}, exc_info=True)
+                LOG.warning(_LW("Skip pulling data from bay %(bay)s due to "
+                                "error: %(e)s"),
+                            {'e': e, 'bay': bay.uuid}, exc_info=True)
                 continue
 
             metrics = list()
@@ -197,24 +174,22 @@ class MagnumPeriodicTasks(periodic_task.PeriodicTasks):
                     }
                     metrics.append(metric)
                 except Exception as e:
-                    LOG.warn(_LW("Skip adding metric %(name)s due to "
-                                 "error: %(e)s"),
-                             {'e': e, 'name': name}, exc_info=True)
+                    LOG.warning(_LW("Skip adding metric %(name)s due to "
+                                    "error: %(e)s"),
+                                {'e': e, 'name': name}, exc_info=True)
 
             message = dict(metrics=metrics,
                            user_id=bay.user_id,
                            project_id=bay.project_id,
                            resource_id=bay.uuid)
-            LOG.debug("About to send notification: '%s'" % message)
+            LOG.debug("About to send notification: '%s'", message)
             self.notifier.info(ctx, "magnum.bay.metrics.update",
                                message)
 
 
-def setup(conf, binary):
-    tg = threadgroup.ThreadGroup()
-    pt = MagnumPeriodicTasks(conf, binary)
+def setup(conf, tg):
+    pt = MagnumPeriodicTasks(conf)
     tg.add_dynamic_timer(
         pt.run_periodic_tasks,
         periodic_interval_max=conf.periodic_interval_max,
         context=None)
-    return tg

@@ -60,9 +60,9 @@ class TestLocalManager(base.BaseTestCase):
 
         def _mock_isfile(path):
             _, ext = os.path.splitext(path)
-            if self.intermediates == None and ext == '.int':
+            if self.intermediates is None and ext == '.int':
                 return False
-            if self.private_key_passphrase == None and ext == '.pass':
+            if self.private_key_passphrase is None and ext == '.pass':
                 return False
             return True
         isfile_patcher = mock.patch('os.path.isfile')
@@ -106,7 +106,7 @@ class TestLocalManager(base.BaseTestCase):
     def _store_cert(self):
         file_mock = mock.mock_open()
         # Attempt to store the cert
-        with mock.patch('__builtin__.open', file_mock, create=True):
+        with mock.patch('six.moves.builtins.open', file_mock, create=True):
             cert_id = local_cert_manager.CertManager.store_cert(
                 certificate=self.certificate,
                 intermediates=self.intermediates,
@@ -131,7 +131,7 @@ class TestLocalManager(base.BaseTestCase):
     def _get_cert(self, cert_id):
         file_mock = mock.mock_open()
         # Attempt to retrieve the cert
-        with mock.patch('__builtin__.open', file_mock, create=True):
+        with mock.patch('six.moves.builtins.open', file_mock, create=True):
             data = local_cert_manager.CertManager.get_cert(cert_id)
 
         # Verify the correct files were opened
@@ -154,7 +154,7 @@ class TestLocalManager(base.BaseTestCase):
         file_mock = mock.mock_open()
         file_mock.side_effect = fake_open
         # Attempt to retrieve the cert
-        with mock.patch('__builtin__.open', file_mock, create=True):
+        with mock.patch('six.moves.builtins.open', file_mock, create=True):
             self.assertRaises(
                 exception.CertificateStorageException,
                 local_cert_manager.CertManager.get_cert,
@@ -187,7 +187,7 @@ class TestLocalManager(base.BaseTestCase):
     def test_store_cert(self):
         self._store_cert()
 
-    @mock.patch('__builtin__.open', create=True)
+    @mock.patch('six.moves.builtins.open', create=True)
     def test_store_cert_with_io_error(self, file_mock):
         file_mock.side_effect = IOError
 

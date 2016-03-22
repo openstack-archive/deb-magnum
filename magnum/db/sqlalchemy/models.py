@@ -117,8 +117,15 @@ class Bay(Base):
     master_count = Column(Integer())
     status = Column(String(20))
     status_reason = Column(Text)
+    bay_create_timeout = Column(Integer())
     discovery_url = Column(String(255))
     master_addresses = Column(JSONEncodedList)
+    # TODO(wanghua): encrypt trust_id in db
+    trust_id = Column(String(255))
+    trustee_username = Column(String(255))
+    trustee_user_id = Column(String(255))
+    # TODO(wanghua): encrypt trustee_password in db
+    trustee_password = Column(String(255))
     # (yuanying) if we use barbican,
     # cert_ref size is determined by below format
     # * http(s)://${DOMAIN_NAME}/v1/containers/${UUID}
@@ -127,19 +134,6 @@ class Bay(Base):
     # so, we use 512 chars to get some buffer.
     ca_cert_ref = Column(String(512))
     magnum_cert_ref = Column(String(512))
-
-
-class BayLock(Base):
-    """Represents a baylock."""
-
-    __tablename__ = 'baylock'
-    __table_args__ = (
-        schema.UniqueConstraint('bay_uuid', name='uniq_baylock0bay_uuid'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    bay_uuid = Column(String(36))
-    conductor_id = Column(String(64))
 
 
 class BayModel(Base):
@@ -162,10 +156,10 @@ class BayModel(Base):
     external_network_id = Column(String(255))
     fixed_network = Column(String(255))
     network_driver = Column(String(255))
+    volume_driver = Column(String(255))
     dns_nameserver = Column(String(255))
     apiserver_port = Column(Integer())
     docker_volume_size = Column(Integer())
-    ssh_authorized_key = Column(Text)
     cluster_distro = Column(String(255))
     coe = Column(String(255))
     http_proxy = Column(String(255))
@@ -196,25 +190,7 @@ class Container(Base):
     bay_uuid = Column(String(36))
     status = Column(String(20))
     memory = Column(String(255))
-
-
-class Node(Base):
-    """Represents a node."""
-
-    __tablename__ = 'node'
-    __table_args__ = (
-        schema.UniqueConstraint('uuid', name='uniq_node0uuid'),
-        schema.UniqueConstraint('ironic_node_id',
-                                name='uniq_node0ironic_node_id'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    uuid = Column(String(36))
-    type = Column(String(20))
-    project_id = Column(String(255))
-    user_id = Column(String(255))
-    image_id = Column(String(255))
-    ironic_node_id = Column(String(36))
+    environment = Column(JSONEncodedDict)
 
 
 class Pod(Base):
@@ -314,3 +290,18 @@ class MagnumService(Base):
     last_seen_up = Column(DateTime, nullable=True)
     forced_down = Column(Boolean, default=False)
     report_count = Column(Integer, nullable=False, default=0)
+
+
+class Quota(Base):
+    """Represents Quota for a resource within a project"""
+    __tablename__ = 'quotas'
+    __table_args__ = (
+        schema.UniqueConstraint(
+            "project_id", "resource",
+            name='uniq_quotas0project_id0resource'),
+        table_args()
+    )
+    id = Column(Integer, primary_key=True)
+    project_id = Column(String(255))
+    resource = Column(String(255))
+    hard_limit = Column(Integer())

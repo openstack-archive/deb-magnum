@@ -10,71 +10,28 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-
 from magnum.common.pythonk8sclient.swagger_client import api_client
 from magnum.common.pythonk8sclient.swagger_client.apis import apiv_api
-from magnum.tests.functional.python_client_base import BayAPITLSTest
 from magnum.tests.functional.python_client_base import BayTest
-from magnumclient.openstack.common.apiclient import exceptions
 
 
-class TestBayModelResource(BayTest):
+class TestKubernetesAPIs(BayTest):
     coe = 'kubernetes'
+    baymodel_kwargs = {
+        "tls_disabled": False,
+        "network_driver": 'flannel',
+        "volume_driver": 'cinder',
+        "fixed_network": '192.168.0.0/24'
+    }
 
-    def test_baymodel_create_and_delete(self):
-        self._test_baymodel_create_and_delete('test_k8s_baymodel')
-
-
-class TestBayResource(BayTest):
-    coe = 'kubernetes'
-
-    def test_bay_create_and_delete(self):
-        baymodel_uuid = self._test_baymodel_create_and_delete(
-            'test_k8s_baymodel', delete=False, tls_disabled=True)
-        self._test_bay_create_and_delete('test_k8s_bay', baymodel_uuid)
-
-
-class TestKubernetesAPIs(BayAPITLSTest):
-    @classmethod
-    def setUpClass(cls):
-        super(TestKubernetesAPIs, cls).setUpClass()
-
-        cls.baymodel = cls._create_baymodel('testk8sAPI',
-                                            coe='kubernetes',
-                                            tls_disabled=False,
-                                            network_driver='flannel',
-                                            fixed_network='192.168.0.0/24',
-                                            )
-        cls.bay = cls._create_bay('testk8sAPI', cls.baymodel.uuid)
-
-        config_contents = """[req]
-distinguished_name = req_distinguished_name
-req_extensions     = req_ext
-prompt = no
-[req_distinguished_name]
-CN = Your Name
-[req_ext]
-extendedKeyUsage = clientAuth
-"""
-        cls._create_tls_ca_files(config_contents)
-        cls.kube_api_url = cls.cs.bays.get(cls.bay.uuid).api_address
-        k8s_client = api_client.ApiClient(cls.kube_api_url,
-                                          key_file=cls.key_file,
-                                          cert_file=cls.cert_file,
-                                          ca_certs=cls.ca_file)
-        cls.k8s_api = apiv_api.ApivApi(k8s_client)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._delete_bay(cls.bay.uuid)
-        try:
-            cls._wait_on_status(cls.bay,
-                                ["CREATE_COMPLETE",
-                                 "DELETE_IN_PROGRESS", "CREATE_FAILED"],
-                                ["DELETE_FAILED", "DELETE_COMPLETE"])
-        except exceptions.NotFound:
-            pass
-        cls._delete_baymodel(cls.baymodel.uuid)
+    def setUp(self):
+        super(TestKubernetesAPIs, self).setUp()
+        self.kube_api_url = self.cs.bays.get(self.bay.uuid).api_address
+        k8s_client = api_client.ApiClient(self.kube_api_url,
+                                          key_file=self.key_file,
+                                          cert_file=self.cert_file,
+                                          ca_certs=self.ca_file)
+        self.k8s_api = apiv_api.ApivApi(k8s_client)
 
     def test_pod_apis(self):
         pod_manifest = {'apiVersion': 'v1',

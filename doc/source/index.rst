@@ -35,7 +35,6 @@ There are several different types of objects in the magnum system:
 * **Bay:** A collection of node objects where work is scheduled
 * **BayModel:** An object stores template information about the bay which is
   used to create new bays consistently
-* **Node:** A baremetal or virtual machine where work executes
 * **Pod:** A collection of containers running on one physical or virtual
   machine
 * **Service:** An abstraction which defines a logical set of pods and a policy
@@ -75,12 +74,25 @@ Developer Info
 .. toctree::
    :maxdepth: 1
 
-   dev/dev-quickstart
-   dev/dev-manual-devstack
-   dev/dev-build-atomic-image.rst
-   dev/dev-kubernetes-load-balancer.rst
-   dev/dev-tls.rst
-   dev/dev-functional-test.rst
+   dev/quickstart
+   dev/manual-devstack
+   dev/bay-template-example.rst
+   dev/build-atomic-image.rst
+   dev/kubernetes-load-balancer.rst
+   dev/tls.rst
+   dev/mesos.rst
+   dev/functional-test.rst
+   magnum-proxy.rst
    contributing
    heat-templates
    objects
+   gmr.rst
+
+Work In Progress
+================
+
+.. toctree::
+   :maxdepth: 1
+
+   troubleshooting-guide.rst
+   userguide.rst

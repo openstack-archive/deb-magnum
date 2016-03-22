@@ -31,7 +31,9 @@ class BayModel(base.MagnumPersistentObject, base.MagnumObject,
     # Version 1.6: Change 'insecure' to 'tls_disabled'
     # Version 1.7: Added 'public' field
     # Version 1.8: Added 'server_type' field
-    VERSION = '1.8'
+    # Version 1.9: Added 'volume_driver' field
+    # Version 1.10: Removed 'ssh_authorized_key' field
+    VERSION = '1.10'
 
     dbapi = dbapi.get_instance()
 
@@ -49,9 +51,9 @@ class BayModel(base.MagnumPersistentObject, base.MagnumObject,
         'external_network_id': fields.StringField(nullable=True),
         'fixed_network': fields.StringField(nullable=True),
         'network_driver': fields.StringField(nullable=True),
+        'volume_driver': fields.StringField(nullable=True),
         'apiserver_port': fields.IntegerField(nullable=True),
         'docker_volume_size': fields.IntegerField(nullable=True),
-        'ssh_authorized_key': fields.StringField(nullable=True),
         'cluster_distro': fields.StringField(nullable=True),
         'coe': m_fields.BayTypeField(nullable=True),
         'http_proxy': fields.StringField(nullable=True),
@@ -84,6 +86,7 @@ class BayModel(base.MagnumPersistentObject, base.MagnumObject,
         """Find a baymodel based on its id or uuid and return a BayModel object.
 
         :param baymodel_id: the id *or* uuid of a baymodel.
+        :param context: Security context
         :returns: a :class:`BayModel` object.
         """
         if utils.is_int_like(baymodel_id):
@@ -98,6 +101,7 @@ class BayModel(base.MagnumPersistentObject, base.MagnumObject,
         """Find a baymodel based on its integer id and return a BayModel object.
 
         :param baymodel_id: the id of a baymodel.
+        :param context: Security context
         :returns: a :class:`BayModel` object.
         """
         db_baymodel = cls.dbapi.get_baymodel_by_id(context, baymodel_id)

@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 import uuid
 
 from heatclient.common import template_utils
@@ -18,10 +19,12 @@ from heatclient import exc
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
+import six
 
 from magnum.common import clients
 from magnum.common import exception
 from magnum.common import short_id
+from magnum.common import utils
 from magnum.conductor.handlers.common import cert_manager
 from magnum.conductor import scale_manager
 from magnum.conductor.template_definition import TemplateDefinition as TDef
@@ -51,8 +54,10 @@ bay_heat_opts = [
                      'interval is in minutes.  The default is no timeout.'))
 ]
 
-cfg.CONF.register_opts(bay_heat_opts, group='bay_heat')
-
+CONF = cfg.CONF
+CONF.register_opts(bay_heat_opts, group='bay_heat')
+CONF.import_opt('trustee_domain_id', 'magnum.common.keystone',
+                group='trust')
 
 LOG = logging.getLogger(__name__)
 
@@ -87,7 +92,7 @@ def _create_stack(context, osc, bay, bay_create_timeout):
         'stack_name': stack_name,
         'parameters': heat_params,
         'template': template,
-        'files': dict(list(tpl_files.items())),
+        'files': tpl_files,
         'timeout_mins': heat_timeout
     }
     created_stack = osc.heat().stacks.create(**fields)
@@ -103,7 +108,7 @@ def _update_stack(context, osc, bay, scale_manager=None):
     fields = {
         'parameters': heat_params,
         'template': template,
-        'files': dict(list(tpl_files.items()))
+        'files': tpl_files
     }
 
     return osc.heat().stacks.update(bay.stack_id, **fields)
@@ -111,10 +116,21 @@ def _update_stack(context, osc, bay, scale_manager=None):
 
 class Handler(object):
 
-    _update_allowed_properties = set(['node_count'])
-
     def __init__(self):
         super(Handler, self).__init__()
+
+    @staticmethod
+    def _create_trustee_and_trust(osc, bay):
+        password = utils.generate_password(length=18)
+        trustee = osc.keystone().create_trustee(
+            bay.uuid,
+            password,
+            CONF.trust.trustee_domain_id)
+        bay.trustee_username = trustee.name
+        bay.trustee_user_id = trustee.id
+        bay.trustee_password = password
+        trust = osc.keystone().create_trust(trustee.id)
+        bay.trust_id = trust.id
 
     # Bay Operations
 
@@ -123,39 +139,43 @@ class Handler(object):
 
         osc = clients.OpenStackClients(context)
 
+        bay.uuid = uuid.uuid4()
+        self._create_trustee_and_trust(osc, bay)
         try:
             # Generate certificate and set the cert reference to bay
-            bay.uuid = uuid.uuid4()
             cert_manager.generate_certificates_to_bay(bay)
             created_stack = _create_stack(context, osc, bay,
                                           bay_create_timeout)
         except exc.HTTPBadRequest as e:
             cert_manager.delete_certificates_from_bay(bay)
-            raise exception.InvalidParameterValue(message=str(e))
+            raise exception.InvalidParameterValue(message=six.text_type(e))
         except Exception:
             raise
 
         bay.stack_id = created_stack['stack']['id']
+        bay.status = bay_status.CREATE_IN_PROGRESS
         bay.create()
 
         self._poll_and_check(osc, bay)
 
         return bay
 
-    def _validate_properties(self, delta):
-        update_disallowed_properties = delta - self._update_allowed_properties
-        if update_disallowed_properties:
-            err = (_("cannot change bay property(ies) %s.") %
-                   ", ".join(update_disallowed_properties))
-            raise exception.InvalidParameterValue(err=err)
-
     def bay_update(self, context, bay):
         LOG.debug('bay_heat bay_update')
 
         osc = clients.OpenStackClients(context)
         stack = osc.heat().stacks.get(bay.stack_id)
-        if (stack.stack_status != bay_status.CREATE_COMPLETE and
-                stack.stack_status != bay_status.UPDATE_COMPLETE):
+        allow_update_status = (
+            bay_status.CREATE_COMPLETE,
+            bay_status.UPDATE_COMPLETE,
+            bay_status.RESUME_COMPLETE,
+            bay_status.RESTORE_COMPLETE,
+            bay_status.ROLLBACK_COMPLETE,
+            bay_status.SNAPSHOT_COMPLETE,
+            bay_status.CHECK_COMPLETE,
+            bay_status.ADOPT_COMPLETE
+        )
+        if stack.stack_status not in allow_update_status:
             operation = _('Updating a bay when stack status is '
                           '"%s"') % stack.stack_status
             raise exception.NotSupported(operation=operation)
@@ -164,8 +184,6 @@ class Handler(object):
         if not delta:
             return bay
 
-        self._validate_properties(delta)
-
         manager = scale_manager.ScaleManager(context, osc, bay)
 
         _update_stack(context, osc, bay, manager)
@@ -173,10 +191,18 @@ class Handler(object):
 
         return bay
 
+    @staticmethod
+    def _delete_trustee_and_trust(osc, bay):
+        osc.keystone().delete_trust(bay.trust_id)
+        osc.keystone().delete_trustee(bay.trustee_user_id)
+
     def bay_delete(self, context, uuid):
         LOG.debug('bay_heat bay_delete')
         osc = clients.OpenStackClients(context)
         bay = objects.Bay.get_by_uuid(context, uuid)
+
+        self._delete_trustee_and_trust(osc, bay)
+
         stack_id = bay.stack_id
         # NOTE(sdake): This will execute a stack_delete operation.  This will
         # Ignore HTTPNotFound exceptions (stack wasn't present).  In the case
@@ -189,12 +215,12 @@ class Handler(object):
             osc.heat().stacks.delete(stack_id)
         except exc.HTTPNotFound:
             LOG.info(_LI('The stack %s was not be found during bay'
-                         ' deletion.') % stack_id)
+                         ' deletion.'), stack_id)
             try:
                 cert_manager.delete_certificates_from_bay(bay)
                 bay.destroy()
             except exception.BayNotFound:
-                LOG.info(_LI('The bay %s has been deleted by others.') % uuid)
+                LOG.info(_LI('The bay %s has been deleted by others.'), uuid)
             return None
         except Exception:
             raise

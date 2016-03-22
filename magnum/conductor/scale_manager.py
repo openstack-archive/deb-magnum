@@ -47,13 +47,13 @@ class ScaleManager(object):
                                    'stack_id': stack.id})
 
         hosts_no_container = list(hosts)
-        k8s_api = k8s.create_k8s_api(self.context, bay)
+        k8s_api = k8s.create_k8s_api(self.context, bay.uuid)
         for pod in k8s_api.list_namespaced_pod(namespace='default').items:
             host = pod.spec.node_name
             if host in hosts_no_container:
                 hosts_no_container.remove(host)
 
-        LOG.debug('List of hosts that has no container: %s' %
+        LOG.debug('List of hosts that has no container: %s',
                   str(hosts_no_container))
 
         num_of_removal = self._get_num_of_removal()
@@ -67,7 +67,7 @@ class ScaleManager(object):
                     'num_non_empty': num_of_removal - len(hosts_no_container)})
 
         hosts_to_remove = hosts_no_container[0:num_of_removal]
-        LOG.info(_LI('Require removal of hosts: %s') % hosts_to_remove)
+        LOG.info(_LI('Require removal of hosts: %s'), hosts_to_remove)
 
         return hosts_to_remove
 

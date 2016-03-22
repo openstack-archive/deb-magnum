@@ -44,6 +44,7 @@ MAGNUM_AUTH_CACHE_DIR=${MAGNUM_AUTH_CACHE_DIR:-/var/cache/magnum}
 MAGNUM_CONF_DIR=/etc/magnum
 MAGNUM_CONF=$MAGNUM_CONF_DIR/magnum.conf
 MAGNUM_POLICY_JSON=$MAGNUM_CONF_DIR/policy.json
+MAGNUM_API_PASTE=$MAGNUM_CONF_DIR/api-paste.ini
 
 if is_ssl_enabled_service "magnum" || is_service_enabled tls-proxy; then
     MAGNUM_SERVICE_PROTOCOL="https"
@@ -54,6 +55,8 @@ MAGNUM_SERVICE_HOST=${MAGNUM_SERVICE_HOST:-$HOST_IP}
 MAGNUM_SERVICE_PORT=${MAGNUM_SERVICE_PORT:-9511}
 MAGNUM_SERVICE_PORT_INT=${MAGNUM_SERVICE_PORT_INT:-19511}
 MAGNUM_SERVICE_PROTOCOL=${MAGNUM_SERVICE_PROTOCOL:-$SERVICE_PROTOCOL}
+
+MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD=${MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD:-secret}
 
 # Support entry points installation of console scripts
 if [[ -d $MAGNUM_DIR/bin ]]; then
@@ -93,6 +96,8 @@ function configure_magnum {
     # Rebuild the config file from scratch
     create_magnum_conf
 
+    create_api_paste_conf
+
     update_heat_policy
 }
 
@@ -100,7 +105,7 @@ function configure_magnum {
 #
 # Project              User         Roles
 # ------------------------------------------------------------------
-# SERVICE_TENANT_NAME  magnum         service
+# SERVICE_PROJECT_NAME  magnum         service
 function create_magnum_accounts {
 
     create_service_user "magnum" "admin"
@@ -136,7 +141,7 @@ function create_magnum_conf {
 
     iniset $MAGNUM_CONF keystone_authtoken admin_user magnum
     iniset $MAGNUM_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
-    iniset $MAGNUM_CONF keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
+    iniset $MAGNUM_CONF keystone_authtoken admin_tenant_name $SERVICE_PROJECT_NAME
 
     configure_auth_token_middleware $MAGNUM_CONF magnum $MAGNUM_AUTH_CACHE_DIR
 
@@ -151,7 +156,7 @@ function create_magnum_conf {
 
     if [ -n "$MAGNUM_STATE_PATH" ]; then
         iniset $MAGNUM_CONF DEFAULT state_path "$MAGNUM_STATE_PATH"
-        iniset $MAGNUM_CONF DEFAULT lock_path "$MAGNUM_STATE_PATH"
+        iniset $MAGNUM_CONF oslo_concurrency lock_path "$MAGNUM_STATE_PATH"
     fi
 
     if [ "$SYSLOG" != "False" ]; then
@@ -177,7 +182,7 @@ function create_magnum_conf {
     fi
 
     if is_service_enabled ceilometer; then
-        iniset $MAGNUM_CONF DEFAULT notification_driver "messaging"
+        iniset $MAGNUM_CONF oslo_messaging_notifications driver "messaging"
     fi
 
     if is_service_enabled barbican; then
@@ -191,22 +196,28 @@ function create_magnum_conf {
         iniset $MAGNUM_CONF certificates storage_path "$MAGNUM_LOCAL_CERT_DIR"
         iniset $MAGNUM_CONF certificates cert_manager_type "local"
     fi
+
+    trustee_domain_id=$(get_or_create_domain magnum 'Owns users and projects created by magnum')
+    trustee_domain_admin_id=$(get_or_create_user trustee_domain_admin $MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD $trustee_domain_id)
+    openstack --os-auth-url $KEYSTONE_SERVICE_URI_V3 \
+              --os-identity-api-version 3 role add \
+              --user $trustee_domain_admin_id --domain $trustee_domain_id \
+              admin
+    iniset $MAGNUM_CONF trust trustee_domain_id $trustee_domain_id
+    iniset $MAGNUM_CONF trust trustee_domain_admin_id $trustee_domain_admin_id
+    iniset $MAGNUM_CONF trust trustee_domain_admin_password $MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD
+    iniset $MAGNUM_CONF cinder_client region_name $REGION_NAME
+}
+
+function create_api_paste_conf {
+    # copy api_paste.ini
+    cp $MAGNUM_DIR/etc/magnum/api-paste.ini $MAGNUM_API_PASTE
 }
 
 function update_heat_policy {
     # enable stacks globel_index search so that magnum can use
     # list(global_tenant=True)
     sed -i 's/\("stacks:global_index":\).*$/\1 "role:admin",/' $HEAT_CONF_DIR/policy.json
-}
-
-function create_magnum_conf_magnum_network {
-    iniset $MAGNUM_CONF DEFAULT network_manager "magnum.network.manager.$NETWORK_MANAGER"
-    iniset $MAGNUM_CONF DEFAULT public_interface "$PUBLIC_INTERFACE"
-    iniset $MAGNUM_CONF DEFAULT vlan_interface "$VLAN_INTERFACE"
-    iniset $MAGNUM_CONF DEFAULT flat_network_bridge "$FLAT_NETWORK_BRIDGE"
-    if [ -n "$FLAT_INTERFACE" ]; then
-        iniset $MAGNUM_CONF DEFAULT flat_interface "$FLAT_INTERFACE"
-    fi
 }
 
 # create_magnum_cache_dir() - Part of the init_magnum() process
@@ -233,8 +244,18 @@ function init_magnum {
 
 # magnum_register_image - Register heat image for magnum with property os_distro
 function magnum_register_image {
-    local magnum_image_property="--property os_distro=fedora-atomic"
-    openstack --os-url $GLANCE_SERVICE_PROTOCOL://$GLANCE_HOSTPORT --os-image-api-version 1 image set $(basename "$MANGUM_GUEST_IMAGE_URL" ".qcow2") $magnum_image_property
+    local magnum_image_property="--property os_distro="
+
+    local atomic="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -o 'atomic' || true;)"
+    if [ ! -z $atomic ]; then
+        magnum_image_property=$magnum_image_property"fedora-atomic"
+    fi
+    local ubuntu="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -o "ubuntu" || ture;)"
+    if [ ! -z $ubuntu ]; then
+        magnum_image_property=$magnum_image_property"ubuntu"
+    fi
+
+    openstack --os-url $GLANCE_SERVICE_PROTOCOL://$GLANCE_HOSTPORT --os-image-api-version 1 image set $(basename "$MAGNUM_GUEST_IMAGE_URL" ".qcow2") $magnum_image_property
 }
 
 # install_magnumclient() - Collect source and prepare

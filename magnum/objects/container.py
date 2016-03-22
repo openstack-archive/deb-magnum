@@ -14,7 +14,6 @@ from oslo_versionedobjects import fields
 
 from magnum.db import api as dbapi
 from magnum.objects import base
-
 from magnum.objects import fields as m_fields
 
 
@@ -23,7 +22,9 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
                 base.MagnumObjectDictCompat):
     # Version 1.0: Initial version
     # Version 1.1: Add memory field
-    VERSION = '1.1'
+    # Version 1.2: Add environment field
+    # Version 1.3: Add filters to list()
+    VERSION = '1.3'
 
     dbapi = dbapi.get_instance()
 
@@ -38,6 +39,7 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
         'bay_uuid': fields.StringField(nullable=True),
         'status': m_fields.ContainerStatusField(nullable=True),
         'memory': fields.StringField(nullable=True),
+        'environment': fields.DictOfStringsField(nullable=True),
     }
 
     @staticmethod
@@ -60,6 +62,7 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
         """Find a container based on its integer id and return a Container object.
 
         :param container_id: the id of a container.
+        :param context: Security context
         :returns: a :class:`Container` object.
         """
         db_container = cls.dbapi.get_container_by_id(context, container_id)
@@ -80,11 +83,11 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
 
     @base.remotable_classmethod
     def get_by_name(cls, context, name):
-        """Find a bay based on name and return a Bay object.
+        """Find a container based on name and return a Container object.
 
-        :param name: the logical name of a bay.
+        :param name: the logical name of a container.
         :param context: Security context
-        :returns: a :class:`Bay` object.
+        :returns: a :class:`Container` object.
         """
         db_bay = cls.dbapi.get_container_by_name(context, name)
         bay = Container._from_db_object(cls(context), db_bay)
@@ -92,7 +95,7 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
 
     @base.remotable_classmethod
     def list(cls, context, limit=None, marker=None,
-             sort_key=None, sort_dir=None):
+             sort_key=None, sort_dir=None, filters=None):
         """Return a list of Container objects.
 
         :param context: Security context.
@@ -100,13 +103,17 @@ class Container(base.MagnumPersistentObject, base.MagnumObject,
         :param marker: pagination marker for large data sets.
         :param sort_key: column to sort results by.
         :param sort_dir: direction to sort. "asc" or "desc".
+        :param filters: filters when list containers, the filter name could be
+                        'name', 'image', 'project_id', 'user_id', 'memory',
+                        'bay_uuid'. For example, filters={'bay_uuid': '1'}
         :returns: a list of :class:`Container` object.
 
         """
         db_containers = cls.dbapi.get_container_list(context, limit=limit,
                                                      marker=marker,
                                                      sort_key=sort_key,
-                                                     sort_dir=sort_dir)
+                                                     sort_dir=sort_dir,
+                                                     filters=filters)
         return Container._from_db_object_list(db_containers, cls, context)
 
     @base.remotable

@@ -17,14 +17,12 @@ Copyright 2015 SmartBear Software
 """
 
 from __future__ import absolute_import
-import __builtin__
 from . import models
 from .rest import RESTClient
 from .rest import ApiException
 
 import os
 import re
-import urllib
 import json
 import mimetypes
 import random
@@ -35,14 +33,10 @@ from datetime import datetime
 from datetime import date
 
 # python 2 and python 3 compatibility library
+import six
 from six import iteritems
-
-try:
-    # for python3
-    from urllib.parse import quote
-except ImportError:
-    # for python2
-    from urllib import quote
+import six.moves.builtins as __builtin__
+from six.moves.urllib import parse as urlparse
 
 from .configuration import Configuration
 
@@ -116,7 +110,7 @@ class ApiClient(object):
         if path_params:
             path_params = self.sanitize_for_serialization(path_params)
             for k, v in iteritems(path_params):
-                replacement = quote(str(self.to_path_value(v)))
+                replacement = urlparse.quote(str(self.to_path_value(v)))
                 resource_path = resource_path.\
                     replace('{' + k + '}', replacement)
 
@@ -191,7 +185,7 @@ class ApiClient(object):
         """
         if isinstance(obj, type(None)):
             return None
-        elif isinstance(obj, (unicode, str, int, float, bool, tuple, file)):
+        elif isinstance(obj, (six.text_type, str, int, float, bool, tuple, file)):
             return obj
         elif isinstance(obj, list):
             return [self.sanitize_for_serialization(sub_obj)
@@ -495,7 +489,7 @@ class ApiClient(object):
         try:
             value = klass(data)
         except UnicodeEncodeError:
-            value = unicode(data)
+            value = six.text_type(data)
         except TypeError:
             value = data
         return value

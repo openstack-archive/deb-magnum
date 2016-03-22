@@ -23,7 +23,7 @@ from magnum.api.controllers import base
 from magnum.api.controllers import link
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
+from magnum.api import utils as api_utils
 from magnum.common import exception
 from magnum import objects
 
@@ -50,7 +50,7 @@ class X509KeyPair(base.APIBase):
     def _set_bay_uuid(self, value):
         if value and self._bay_uuid != value:
             try:
-                bay = api_utils.get_rpc_resource('Bay', value)
+                bay = api_utils.get_resource('Bay', value)
                 self._bay_uuid = bay.uuid
             except exception.BayNotFound as e:
                 # Change error code because 404 (NotFound) is inappropriate
@@ -174,7 +174,7 @@ class X509KeyPairController(rest.RestController):
             marker_obj = objects.X509KeyPair.get_by_uuid(pecan.request.context,
                                                          marker)
 
-        x509keypairs = pecan.request.rpcapi.x509keypair_list(
+        x509keypairs = objects.X509KeyPair.list(
             pecan.request.context, limit,
             marker_obj, sort_key=sort_key,
             sort_dir=sort_dir)
@@ -210,7 +210,7 @@ class X509KeyPairController(rest.RestController):
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         """
-        # NOTE(lucasagomes): /detail should only work agaist collections
+        # NOTE(lucasagomes): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "x509keypairs":
             raise exception.HTTPNotFound
@@ -228,10 +228,10 @@ class X509KeyPairController(rest.RestController):
         :param x509keypair_ident: UUID of a x509keypair or
         logical name of the x509keypair.
         """
-        rpc_x509keypair = api_utils.get_rpc_resource('X509KeyPair',
-                                                     x509keypair_ident)
+        x509keypair = api_utils.get_resource('X509KeyPair',
+                                             x509keypair_ident)
 
-        return X509KeyPair.convert_with_links(rpc_x509keypair)
+        return X509KeyPair.convert_with_links(x509keypair)
 
     @wsme_pecan.wsexpose(X509KeyPair, body=X509KeyPair, status_code=201)
     def post(self, x509keypair):
@@ -258,7 +258,7 @@ class X509KeyPairController(rest.RestController):
         :param x509keypair_ident: UUID of a x509keypair or logical
         name of the x509keypair.
         """
-        rpc_x509keypair = api_utils.get_rpc_resource('X509KeyPair',
-                                                     x509keypair_ident)
+        x509keypair = api_utils.get_resource('X509KeyPair',
+                                             x509keypair_ident)
 
-        pecan.request.rpcapi.x509keypair_delete(rpc_x509keypair.uuid)
+        pecan.request.rpcapi.x509keypair_delete(x509keypair.uuid)

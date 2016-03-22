@@ -14,7 +14,6 @@
 
 """Starter script for the Magnum conductor service."""
 
-import logging as std_logging
 import os
 import sys
 
@@ -45,9 +44,9 @@ def main():
 
     gmr.TextGuruMeditation.setup_autorun(version)
 
-    LOG.info(_LI('Starting server in PID %s') % os.getpid())
+    LOG.info(_LI('Starting server in PID %s'), os.getpid())
     LOG.debug("Configuration:")
-    cfg.CONF.log_opt_values(LOG, std_logging.DEBUG)
+    cfg.CONF.log_opt_values(LOG, logging.DEBUG)
 
     cfg.CONF.import_opt('topic', 'magnum.conductor.config', group='conductor')
 

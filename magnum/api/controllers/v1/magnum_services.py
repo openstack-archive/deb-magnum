@@ -86,15 +86,17 @@ class MagnumServiceController(rest.RestController):
         super(MagnumServiceController, self).__init__()
         self.servicegroup_api = svcgrp_api.ServiceGroup()
 
-    @policy.enforce_wsgi("magnum-service", "get_all")
     @expose.expose(MagnumServiceCollection)
+    @policy.enforce_wsgi("magnum-service")
     def get_all(self):
         """Retrieve a list of magnum-services.
 
         """
-        msvcs = pecan.request.rpcapi.magnum_services_list(
-            pecan.request.context, limit=None,
-            marker=None, sort_key='id',
-            sort_dir='asc')
+        msvcs = objects.MagnumService.list(pecan.request.context,
+                                           limit=None,
+                                           marker=None,
+                                           sort_key='id',
+                                           sort_dir='asc')
+
         return MagnumServiceCollection.convert_db_rec_list_to_collection(
             self.servicegroup_api, msvcs)

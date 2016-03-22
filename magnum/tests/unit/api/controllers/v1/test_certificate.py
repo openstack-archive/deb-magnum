@@ -11,24 +11,23 @@
 #    limitations under the License.
 
 import mock
-from oslo_policy import policy
 
 from magnum.api.controllers.v1 import certificate as api_cert
 from magnum.common import utils
 from magnum.tests import base
 from magnum.tests.unit.api import base as api_base
-from magnum.tests.unit.api import utils as apiutils
+from magnum.tests.unit.api import utils as api_utils
 from magnum.tests.unit.objects import utils as obj_utils
 
 
 class TestCertObject(base.TestCase):
 
-    @mock.patch('magnum.api.controllers.v1.utils.get_rpc_resource')
-    def test_cert_init(self, mock_get_rpc_resource):
-        cert_dict = apiutils.cert_post_data()
+    @mock.patch('magnum.api.utils.get_resource')
+    def test_cert_init(self, mock_get_resource):
+        cert_dict = api_utils.cert_post_data()
         mock_bay = mock.MagicMock()
         mock_bay.uuid = cert_dict['bay_uuid']
-        mock_get_rpc_resource.return_value = mock_bay
+        mock_get_resource.return_value = mock_bay
 
         cert = api_cert.Certificate(**cert_dict)
 
@@ -50,7 +49,7 @@ class TestGetCertificate(api_base.FunctionalTest):
         self.addCleanup(conductor_api_patcher.stop)
 
     def test_get_one(self):
-        fake_cert = apiutils.cert_post_data()
+        fake_cert = api_utils.cert_post_data()
         mock_cert = mock.MagicMock()
         mock_cert.as_dict.return_value = fake_cert
         self.conductor_api.get_ca_certificate.return_value = mock_cert
@@ -62,7 +61,7 @@ class TestGetCertificate(api_base.FunctionalTest):
         self.assertEqual(fake_cert['pem'], response['pem'])
 
     def test_get_one_by_name(self):
-        fake_cert = apiutils.cert_post_data()
+        fake_cert = api_utils.cert_post_data()
         mock_cert = mock.MagicMock()
         mock_cert.as_dict.return_value = fake_cert
         self.conductor_api.get_ca_certificate.return_value = mock_cert
@@ -79,7 +78,7 @@ class TestGetCertificate(api_base.FunctionalTest):
 
         self.assertEqual(404, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_get_one_by_name_multiple_bay(self):
         obj_utils.create_test_bay(self.context, name='test_bay',
@@ -92,10 +91,10 @@ class TestGetCertificate(api_base.FunctionalTest):
 
         self.assertEqual(409, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
     def test_links(self):
-        fake_cert = apiutils.cert_post_data()
+        fake_cert = api_utils.cert_post_data()
         mock_cert = mock.MagicMock()
         mock_cert.as_dict.return_value = fake_cert
         self.conductor_api.get_ca_certificate.return_value = mock_cert
@@ -130,7 +129,7 @@ class TestPost(api_base.FunctionalTest):
         return cert
 
     def test_create_cert(self, ):
-        new_cert = apiutils.cert_post_data(bay_uuid=self.bay.uuid)
+        new_cert = api_utils.cert_post_data(bay_uuid=self.bay.uuid)
         del new_cert['pem']
 
         response = self.post_json('/certificates', new_cert)
@@ -140,7 +139,7 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual('fake-pem', response.json['pem'])
 
     def test_create_cert_by_bay_name(self, ):
-        new_cert = apiutils.cert_post_data(bay_uuid=self.bay.name)
+        new_cert = api_utils.cert_post_data(bay_uuid=self.bay.name)
         del new_cert['pem']
 
         response = self.post_json('/certificates', new_cert)
@@ -151,7 +150,7 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual('fake-pem', response.json['pem'])
 
     def test_create_cert_bay_not_found(self, ):
-        new_cert = apiutils.cert_post_data(bay_uuid='not_found')
+        new_cert = api_utils.cert_post_data(bay_uuid='not_found')
         del new_cert['pem']
 
         response = self.post_json('/certificates', new_cert,
@@ -159,7 +158,7 @@ class TestPost(api_base.FunctionalTest):
 
         self.assertEqual(400, response.status_int)
         self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['error_message'])
+        self.assertTrue(response.json['errors'])
 
 
 class TestCertPolicyEnforcement(api_base.FunctionalTest):
@@ -168,18 +167,24 @@ class TestCertPolicyEnforcement(api_base.FunctionalTest):
         super(TestCertPolicyEnforcement, self).setUp()
 
     def _common_policy_check(self, rule, func, *arg, **kwarg):
-        self.policy.set_rules({rule: "project:non_fake"})
-        exc = self.assertRaises(policy.PolicyNotAuthorized,
-                                func, *arg, **kwarg)
-        self.assertTrue(exc.message.startswith(rule))
-        self.assertTrue(exc.message.endswith("disallowed by policy"))
+        self.policy.set_rules({rule: "project_id:non_fake"})
+        response = func(*arg, **kwarg)
+        self.assertEqual(403, response.status_int)
+        self.assertEqual('application/json', response.content_type)
+        self.assertTrue(
+            "Policy doesn't allow %s to be performed." % rule,
+            response.json['errors'][0]['detail'])
 
     def test_policy_disallow_get_one(self):
+        bay = obj_utils.create_test_bay(self.context)
         self._common_policy_check(
             "certificate:get", self.get_json,
-            '/certificates/ce5da569-4f65-4272-9199-fac8c9fbc9d4')
+            '/certificates/%s' % bay.uuid,
+            expect_errors=True)
 
     def test_policy_disallow_create(self):
-        cert = apiutils.cert_post_data()
+        bay = obj_utils.create_test_bay(self.context)
+        cert = api_utils.cert_post_data(bay_uuid=bay.uuid)
         self._common_policy_check(
-            "certificate:create", self.post_json, '/certificates', cert)
+            "certificate:create", self.post_json, '/certificates', cert,
+            expect_errors=True)

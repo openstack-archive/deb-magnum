@@ -20,17 +20,14 @@ from magnum.api.controllers import link
 from magnum.api.controllers.v1 import base as v1_base
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
 from magnum.api import expose
+from magnum.api import utils as api_utils
 from magnum.api import validation
 from magnum.common import exception
 from magnum.common import k8s_manifest
 from magnum.common import policy
+from magnum.i18n import _
 from magnum import objects
-
-
-# NOTE(dims): We don't depend on oslo*i18n yet
-_ = _LI = _LW = _LE = _LC = lambda x: x
 
 
 class ServicePatchType(v1_base.K8sPatchType):
@@ -133,12 +130,12 @@ class Service(v1_base.K8sResourceBase):
             self.name = manifest["metadata"]["name"]
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field metadata['name'] can't be empty in manifest.")
+                _("Field metadata['name'] can't be empty in manifest."))
         try:
             self.ports = manifest["spec"]["ports"][:]
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field spec['ports'] can't be empty in manifest.")
+                _("Field spec['ports'] can't be empty in manifest."))
 
         if "selector" in manifest["spec"]:
             self.selector = manifest["spec"]["selector"]
@@ -188,17 +185,9 @@ class ServicesController(rest.RestController):
 
         limit = api_utils.validate_limit(limit)
         sort_dir = api_utils.validate_sort_dir(sort_dir)
+        context = pecan.request.context
 
-        marker_obj = None
-        if marker:
-            marker_obj = objects.Service.get_by_uuid(pecan.request.context,
-                                                     marker)
-
-        services = pecan.request.rpcapi.service_list(pecan.request.context,
-                                                     limit,
-                                                     marker_obj,
-                                                     sort_key=sort_key,
-                                                     sort_dir=sort_dir)
+        services = pecan.request.rpcapi.service_list(context, bay_ident)
 
         return ServiceCollection.convert_with_links(services, limit,
                                                     url=resource_url,
@@ -206,11 +195,12 @@ class ServicesController(rest.RestController):
                                                     sort_key=sort_key,
                                                     sort_dir=sort_dir)
 
+    @expose.expose(ServiceCollection, types.uuid, types.uuid_or_name, int,
+                   wtypes.text, wtypes.text)
     @policy.enforce_wsgi("service")
-    @expose.expose(ServiceCollection, types.uuid, int, wtypes.text,
-                   wtypes.text, types.uuid_or_name)
-    def get_all(self, marker=None, limit=None, sort_key='id',
-                sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def get_all(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of services.
 
         :param marker: pagination marker for large data sets.
@@ -222,11 +212,12 @@ class ServicesController(rest.RestController):
         return self._get_services_collection(marker, limit, sort_key,
                                              sort_dir, bay_ident)
 
+    @expose.expose(ServiceCollection, types.uuid, types.uuid_or_name, int,
+                   wtypes.text, wtypes.text)
     @policy.enforce_wsgi("service")
-    @expose.expose(ServiceCollection, types.uuid, int, wtypes.text,
-                   wtypes.text, types.uuid_or_name)
-    def detail(self, marker=None, limit=None, sort_key='id',
-               sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def detail(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of services with detail.
 
         :param marker: pagination marker for large data sets.
@@ -235,7 +226,7 @@ class ServicesController(rest.RestController):
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        # NOTE(lucasagomes): /detail should only work agaist collections
+        # NOTE(lucasagomes): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "services":
             raise exception.HTTPNotFound
@@ -243,24 +234,28 @@ class ServicesController(rest.RestController):
         expand = True
         resource_url = '/'.join(['services', 'detail'])
         return self._get_services_collection(marker, limit,
-                                             sort_key, sort_dir, expand,
+                                             sort_key, sort_dir,
+                                             bay_ident, expand,
                                              resource_url)
 
-    @policy.enforce_wsgi("service", "get")
     @expose.expose(Service, types.uuid_or_name,
                    types.uuid_or_name)
+    @policy.enforce_wsgi("service", "get")
+    @validation.enforce_bay_types('kubernetes')
     def get_one(self, service_ident, bay_ident):
         """Retrieve information about the given service.
 
         :param service_ident: UUID or logical name of the service.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        rpc_service = api_utils.get_rpc_resource('Service', service_ident)
-
+        context = pecan.request.context
+        rpc_service = pecan.request.rpcapi.service_show(context,
+                                                        service_ident,
+                                                        bay_ident)
         return Service.convert_with_links(rpc_service)
 
-    @policy.enforce_wsgi("service", "create")
     @expose.expose(Service, body=Service, status_code=201)
+    @policy.enforce_wsgi("service", "create")
     @validation.enforce_bay_types('kubernetes')
     def post(self, service):
         """Create a new service.
@@ -281,10 +276,11 @@ class ServicesController(rest.RestController):
         pecan.response.location = link.build_url('services', new_service.uuid)
         return Service.convert_with_links(new_service)
 
-    @policy.enforce_wsgi("service", "update")
     @wsme.validate(types.uuid, [ServicePatchType])
     @expose.expose(Service, types.uuid_or_name,
                    types.uuid_or_name, body=[ServicePatchType])
+    @policy.enforce_wsgi("service", "update")
+    @validation.enforce_bay_types('kubernetes')
     def patch(self, service_ident, bay_ident, patch):
         """Update an existing service.
 
@@ -292,46 +288,29 @@ class ServicesController(rest.RestController):
         :param bay_ident: UUID or logical name of the Bay.
         :param patch: a json PATCH document to apply to this service.
         """
-        rpc_service = api_utils.get_rpc_resource('Service', service_ident)
-        # Init manifest and manifest_url field because we don't store them
-        # in database.
-        rpc_service['manifest'] = None
-        rpc_service['manifest_url'] = None
+        service_dict = {}
+        service_dict['manifest'] = None
+        service_dict['manifest_url'] = None
         try:
-            service_dict = rpc_service.as_dict()
             service = Service(**api_utils.apply_jsonpatch(service_dict, patch))
             if service.manifest or service.manifest_url:
                 service.parse_manifest()
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
 
-        # Update only the fields that have changed
-        for field in objects.Service.fields:
-            try:
-                patch_val = getattr(service, field)
-            except AttributeError:
-                # Ignore fields that aren't exposed in the API
-                continue
-            if patch_val == wtypes.Unset:
-                patch_val = None
-            if rpc_service[field] != patch_val:
-                rpc_service[field] = patch_val
-
-        if service.manifest or service.manifest_url:
-            pecan.request.rpcapi.service_update(rpc_service)
-        else:
-            rpc_service.save()
+        rpc_service = pecan.request.rpcapi.service_update(service_ident,
+                                                          bay_ident,
+                                                          service.manifest)
         return Service.convert_with_links(rpc_service)
 
-    @policy.enforce_wsgi("service")
     @expose.expose(None, types.uuid_or_name,
                    types.uuid_or_name, status_code=204)
+    @policy.enforce_wsgi("service")
+    @validation.enforce_bay_types('kubernetes')
     def delete(self, service_ident, bay_ident):
         """Delete a service.
 
         :param service_ident: UUID or logical name of a service.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        rpc_service = api_utils.get_rpc_resource('Service', service_ident)
-
-        pecan.request.rpcapi.service_delete(rpc_service.uuid)
+        pecan.request.rpcapi.service_delete(service_ident, bay_ident)

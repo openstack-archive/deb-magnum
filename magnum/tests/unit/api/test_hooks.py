@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
+import six
 
 import mock
 from oslo_config import cfg
@@ -89,7 +89,7 @@ class TestNoExceptionTracebackHook(api_base.FunctionalTest):
 
         response = self.get_json('/', path_prefix='', expect_errors=True)
 
-        actual_msg = json.loads(response.json['error_message'])['faultstring']
+        actual_msg = response.json['errors'][0]['detail']
         self.assertEqual(self.MSG_WITHOUT_TRACE, actual_msg)
 
     def test_hook_remote_error_success(self):
@@ -104,9 +104,14 @@ class TestNoExceptionTracebackHook(api_base.FunctionalTest):
         # instead of'\n'.join(trace). But since RemoteError is kind of very
         # rare thing (happens due to wrong deserialization settings etc.)
         # we don't care about this garbage.
-        expected_msg = ("Remote error: %s %s"
-                        % (test_exc_type, self.MSG_WITHOUT_TRACE) + "\n[u'")
-        actual_msg = json.loads(response.json['error_message'])['faultstring']
+        if six.PY2:
+            expected_msg = ("Remote error: %s %s"
+                            % (test_exc_type, self.MSG_WITHOUT_TRACE)
+                            + "\n[u'")
+        else:
+            expected_msg = ("Remote error: %s %s"
+                            % (test_exc_type, self.MSG_WITHOUT_TRACE) + "\n['")
+        actual_msg = response.json['errors'][0]['detail']
         self.assertEqual(expected_msg, actual_msg)
 
     def test_hook_without_traceback(self):
@@ -115,7 +120,7 @@ class TestNoExceptionTracebackHook(api_base.FunctionalTest):
 
         response = self.get_json('/', path_prefix='', expect_errors=True)
 
-        actual_msg = json.loads(response.json['error_message'])['faultstring']
+        actual_msg = response.json['errors'][0]['detail']
         self.assertEqual(msg, actual_msg)
 
     def test_hook_server_debug_on_serverfault(self):
@@ -124,8 +129,7 @@ class TestNoExceptionTracebackHook(api_base.FunctionalTest):
 
         response = self.get_json('/', path_prefix='', expect_errors=True)
 
-        actual_msg = json.loads(
-            response.json['error_message'])['faultstring']
+        actual_msg = response.json['errors'][0]['detail']
         self.assertEqual(self.MSG_WITHOUT_TRACE, actual_msg)
 
     def test_hook_server_debug_on_clientfault(self):
@@ -136,6 +140,5 @@ class TestNoExceptionTracebackHook(api_base.FunctionalTest):
 
         response = self.get_json('/', path_prefix='', expect_errors=True)
 
-        actual_msg = json.loads(
-            response.json['error_message'])['faultstring']
+        actual_msg = response.json['errors'][0]['detail']
         self.assertEqual(self.MSG_WITH_TRACE, actual_msg)

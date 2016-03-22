@@ -21,12 +21,13 @@ from magnum.api.controllers import link
 from magnum.api.controllers.v1 import base as v1_base
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
 from magnum.api import expose
+from magnum.api import utils as api_utils
 from magnum.api import validation
 from magnum.common import exception
 from magnum.common import k8s_manifest
 from magnum.common import policy
+from magnum.i18n import _
 from magnum import objects
 
 
@@ -126,7 +127,7 @@ class Pod(v1_base.K8sResourceBase):
             self.name = manifest["metadata"]["name"]
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field metadata['name'] can't be empty in manifest.")
+                _("Field metadata['name'] can't be empty in manifest."))
         images = []
         try:
             for container in manifest["spec"]["containers"]:
@@ -134,7 +135,7 @@ class Pod(v1_base.K8sResourceBase):
             self.images = images
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field spec['containers'] can't be empty in manifest.")
+                _("Field spec['containers'] can't be empty in manifest."))
         if "labels" in manifest["metadata"]:
             self.labels = manifest["metadata"]["labels"]
 
@@ -180,15 +181,9 @@ class PodsController(rest.RestController):
 
         limit = api_utils.validate_limit(limit)
         sort_dir = api_utils.validate_sort_dir(sort_dir)
+        context = pecan.request.context
 
-        marker_obj = None
-        if marker:
-            marker_obj = objects.Pod.get_by_uuid(pecan.request.context,
-                                                 marker)
-
-        pods = pecan.request.rpcapi.pod_list(pecan.request.context, limit,
-                                             marker_obj, sort_key=sort_key,
-                                             sort_dir=sort_dir)
+        pods = pecan.request.rpcapi.pod_list(context, bay_ident)
 
         return PodCollection.convert_with_links(pods, limit,
                                                 url=resource_url,
@@ -196,27 +191,30 @@ class PodsController(rest.RestController):
                                                 sort_key=sort_key,
                                                 sort_dir=sort_dir)
 
+    @expose.expose(PodCollection, types.uuid, types.uuid_or_name, int,
+                   wtypes.text, wtypes.text)
     @policy.enforce_wsgi("pod")
-    @expose.expose(PodCollection, types.uuid, int, wtypes.text,
-                   wtypes.text, types.uuid_or_name)
-    def get_all(self, marker=None, limit=None, sort_key='id',
-                sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def get_all(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of pods.
 
         :param marker: pagination marker for large data sets.
+        :param bay_ident: UUID or logical name of the Bay.
         :param limit: maximum number of resources to return in a single result.
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
-        :param bay_ident: UUID or logical name of the Bay.
+
         """
         return self._get_pods_collection(marker, limit, sort_key,
                                          sort_dir, bay_ident)
 
+    @expose.expose(PodCollection, types.uuid, types.uuid_or_name, int,
+                   wtypes.text, wtypes.text)
     @policy.enforce_wsgi("pod")
-    @expose.expose(PodCollection, types.uuid, int, wtypes.text,
-                   wtypes.text, types.uuid_or_name)
-    def detail(self, marker=None, limit=None, sort_key='id',
-               sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def detail(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of pods with detail.
 
         :param marker: pagination marker for large data sets.
@@ -225,7 +223,7 @@ class PodsController(rest.RestController):
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        # NOTE(lucasagomes): /detail should only work agaist collections
+        # NOTE(lucasagomes): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "pods":
             raise exception.HTTPNotFound
@@ -237,21 +235,23 @@ class PodsController(rest.RestController):
                                          bay_ident, expand,
                                          resource_url)
 
-    @policy.enforce_wsgi("pod", "get")
     @expose.expose(Pod, types.uuid_or_name,
                    types.uuid_or_name)
+    @policy.enforce_wsgi("pod", "get")
+    @validation.enforce_bay_types('kubernetes')
     def get_one(self, pod_ident, bay_ident):
         """Retrieve information about the given pod.
 
         :param pod_ident: UUID of a pod or logical name of the pod.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        rpc_pod = api_utils.get_rpc_resource('Pod', pod_ident)
+        context = pecan.request.context
+        rpc_pod = pecan.request.rpcapi.pod_show(context, pod_ident, bay_ident)
 
         return Pod.convert_with_links(rpc_pod)
 
-    @policy.enforce_wsgi("pod", "create")
     @expose.expose(Pod, body=Pod, status_code=201)
+    @policy.enforce_wsgi("pod", "create")
     @validation.enforce_bay_types('kubernetes')
     def post(self, pod):
         """Create a new pod.
@@ -269,10 +269,11 @@ class PodsController(rest.RestController):
         pecan.response.location = link.build_url('pods', new_pod.uuid)
         return Pod.convert_with_links(new_pod)
 
-    @policy.enforce_wsgi("pod", "update")
     @wsme.validate(types.uuid, [PodPatchType])
     @expose.expose(Pod, types.uuid_or_name,
                    types.uuid_or_name, body=[PodPatchType])
+    @policy.enforce_wsgi("pod", "update")
+    @validation.enforce_bay_types('kubernetes')
     def patch(self, pod_ident, bay_ident, patch):
         """Update an existing pod.
 
@@ -280,46 +281,28 @@ class PodsController(rest.RestController):
         :param bay_ident: UUID or logical name of the Bay.
         :param patch: a json PATCH document to apply to this pod.
         """
-        rpc_pod = api_utils.get_rpc_resource('Pod', pod_ident)
-        # Init manifest and manifest_url field because we don't store them
-        # in database.
-        rpc_pod['manifest'] = None
-        rpc_pod['manifest_url'] = None
+        pod_dict = {}
+        pod_dict['manifest'] = None
+        pod_dict['manifest_url'] = None
         try:
-            pod_dict = rpc_pod.as_dict()
             pod = Pod(**api_utils.apply_jsonpatch(pod_dict, patch))
             if pod.manifest or pod.manifest_url:
                 pod.parse_manifest()
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
 
-        # Update only the fields that have changed
-        for field in objects.Pod.fields:
-            try:
-                patch_val = getattr(pod, field)
-            except AttributeError:
-                # Ignore fields that aren't exposed in the API
-                continue
-            if patch_val == wtypes.Unset:
-                patch_val = None
-            if rpc_pod[field] != patch_val:
-                rpc_pod[field] = patch_val
-
-        if pod.manifest or pod.manifest_url:
-            pecan.request.rpcapi.pod_update(rpc_pod)
-        else:
-            rpc_pod.save()
+        rpc_pod = pecan.request.rpcapi.pod_update(pod_ident, bay_ident,
+                                                  pod.manifest)
         return Pod.convert_with_links(rpc_pod)
 
-    @policy.enforce_wsgi("pod")
     @expose.expose(None, types.uuid_or_name,
                    types.uuid_or_name, status_code=204)
+    @policy.enforce_wsgi("pod")
+    @validation.enforce_bay_types('kubernetes')
     def delete(self, pod_ident, bay_ident):
         """Delete a pod.
 
         :param pod_ident: UUID of a pod or logical name of the pod.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        rpc_pod = api_utils.get_rpc_resource('Pod', pod_ident)
-
-        pecan.request.rpcapi.pod_delete(rpc_pod.uuid)
+        pecan.request.rpcapi.pod_delete(pod_ident, bay_ident)

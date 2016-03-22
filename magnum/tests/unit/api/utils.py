@@ -13,11 +13,11 @@
 Utils for testing the API service.
 """
 import datetime
+
 import pytz
 
 from magnum.api.controllers.v1 import bay as bay_controller
 from magnum.api.controllers.v1 import baymodel as baymodel_controller
-from magnum.api.controllers.v1 import node as node_controller
 from magnum.api.controllers.v1 import pod as pod_controller
 from magnum.api.controllers.v1 import replicationcontroller as rc_controller
 from magnum.api.controllers.v1 import service as service_controller
@@ -28,7 +28,7 @@ from magnum.tests.unit.db import utils
 def remove_internal(values, internal):
     # NOTE(yuriyz): internal attributes should not be posted, except uuid
     int_attr = [attr.lstrip('/') for attr in internal if attr != '/uuid']
-    return dict([(k, v) for (k, v) in values.items() if k not in int_attr])
+    return {k: v for (k, v) in values.items() if k not in int_attr}
 
 
 def baymodel_post_data(**kw):
@@ -39,8 +39,6 @@ def baymodel_post_data(**kw):
 
 def bay_post_data(**kw):
     bay = utils.get_test_bay(**kw)
-    # the timeout property is a part of the request and doesn't persist
-    # in the bay db
     bay['bay_create_timeout'] = kw.get('bay_create_timeout', 15)
     internal = bay_controller.BayPatchType.internal_attrs()
     return remove_internal(bay, internal)
@@ -140,12 +138,6 @@ def rc_post_data(**kw):
     return remove_internal(rc, internal)
 
 
-def node_post_data(**kw):
-    node = utils.get_test_node(**kw)
-    internal = node_controller.NodePatchType.internal_attrs()
-    return remove_internal(node, internal)
-
-
 def x509keypair_post_data(**kw):
     x509keypair = utils.get_test_x509keypair(**kw)
     internal = x509keypair_controller.X509KeyPairPatchType.internal_attrs()
@@ -158,8 +150,8 @@ def mservice_get_data(**kw):
     return {
         'binary': kw.get('binary', 'fake-binary'),
         'host': kw.get('host', 'fake-host'),
-        'id': kw.get('id', '13'),
-        'report_count': kw.get('report_count', '13'),
+        'id': kw.get('id', 13),
+        'report_count': kw.get('report_count', 13),
         'disabled': kw.get('disabled', False),
         'disabled_reason': kw.get('disabled_reason', None),
         'forced_down': kw.get('forced_down', False),

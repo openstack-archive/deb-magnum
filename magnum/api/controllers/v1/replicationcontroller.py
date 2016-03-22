@@ -22,12 +22,13 @@ from magnum.api.controllers import link
 from magnum.api.controllers.v1 import base as v1_base
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
 from magnum.api import expose
+from magnum.api import utils as api_utils
 from magnum.api import validation
 from magnum.common import exception
 from magnum.common import k8s_manifest
 from magnum.common import policy
+from magnum.i18n import _
 from magnum import objects
 
 
@@ -142,7 +143,7 @@ class ReplicationController(v1_base.K8sResourceBase):
             self.name = manifest["metadata"]["name"]
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field metadata['name'] can't be empty in manifest.")
+                _("Field metadata['name'] can't be empty in manifest."))
         try:
             self.replicas = manifest["spec"]["replicas"]
         except (KeyError, TypeError):
@@ -151,22 +152,22 @@ class ReplicationController(v1_base.K8sResourceBase):
             self.selector = manifest["spec"]["selector"]
         except (KeyError, TypeError):
             raise exception.InvalidParameterValue(
-                "Field spec['selector'] can't be empty in manifest.")
+                _("Field spec['selector'] can't be empty in manifest."))
         try:
             self.labels = manifest["spec"]["template"]["metadata"]["labels"]
         except (KeyError, TypeError):
-            raise exception.InvalidParameterValue(
+            raise exception.InvalidParameterValue(_(
                 "Field spec['template']['metadata']['labels'] "
-                "can't be empty in manifest.")
+                "can't be empty in manifest."))
         try:
             images = []
             for cont in manifest["spec"]["template"]["spec"]["containers"]:
                 images.append(cont["image"])
             self.images = images
         except (KeyError, TypeError):
-            raise exception.InvalidParameterValue(
+            raise exception.InvalidParameterValue(_(
                 "Field spec['template']['spec']['containers'] "
-                "can't be empty in manifest.")
+                "can't be empty in manifest."))
 
 
 class ReplicationControllerCollection(collection.Collection):
@@ -219,11 +220,12 @@ class ReplicationControllersController(rest.RestController):
             sort_key=sort_key,
             sort_dir=sort_dir)
 
+    @expose.expose(ReplicationControllerCollection, types.uuid,
+                   types.uuid_or_name, int, wtypes.text, wtypes.text)
     @policy.enforce_wsgi("rc")
-    @expose.expose(ReplicationControllerCollection, types.uuid, int,
-                   wtypes.text, wtypes.text, types.uuid_or_name)
-    def get_all(self, marker=None, limit=None, sort_key='id',
-                sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def get_all(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+                sort_dir='asc'):
         """Retrieve a list of ReplicationControllers.
 
         :param marker: pagination marker for large data sets.
@@ -235,11 +237,12 @@ class ReplicationControllersController(rest.RestController):
         return self._get_rcs_collection(marker, limit, sort_key,
                                         sort_dir, bay_ident)
 
+    @expose.expose(ReplicationControllerCollection, types.uuid,
+                   types.uuid_or_name, int, wtypes.text, wtypes.text)
     @policy.enforce_wsgi("rc")
-    @expose.expose(ReplicationControllerCollection, types.uuid, int,
-                   wtypes.text, wtypes.text, types.uuid_or_name)
-    def detail(self, marker=None, limit=None, sort_key='id',
-               sort_dir='asc', bay_ident=None):
+    @validation.enforce_bay_types('kubernetes')
+    def detail(self, marker=None, bay_ident=None, limit=None, sort_key='id',
+               sort_dir='asc'):
         """Retrieve a list of ReplicationControllers with detail.
 
         :param marker: pagination marker for large data sets.
@@ -248,7 +251,7 @@ class ReplicationControllersController(rest.RestController):
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         :param bay_ident: UUID or logical name of the Bay.
         """
-        # NOTE(jay-lau-513): /detail should only work agaist collections
+        # NOTE(jay-lau-513): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "rcs":
             raise exception.HTTPNotFound
@@ -260,9 +263,10 @@ class ReplicationControllersController(rest.RestController):
                                         bay_ident, expand,
                                         resource_url)
 
-    @policy.enforce_wsgi("rc", "get")
     @expose.expose(ReplicationController, types.uuid_or_name,
                    types.uuid_or_name)
+    @policy.enforce_wsgi("rc", "get")
+    @validation.enforce_bay_types('kubernetes')
     def get_one(self, rc_ident, bay_ident):
         """Retrieve information about the given ReplicationController.
 
@@ -273,9 +277,9 @@ class ReplicationControllersController(rest.RestController):
         rpc_rc = pecan.request.rpcapi.rc_show(context, rc_ident, bay_ident)
         return ReplicationController.convert_with_links(rpc_rc)
 
-    @policy.enforce_wsgi("rc", "create")
     @expose.expose(ReplicationController, body=ReplicationController,
                    status_code=201)
+    @policy.enforce_wsgi("rc", "create")
     @validation.enforce_bay_types('kubernetes')
     def post(self, rc):
         """Create a new ReplicationController.
@@ -296,10 +300,11 @@ class ReplicationControllersController(rest.RestController):
         pecan.response.location = link.build_url('rcs', new_rc.uuid)
         return ReplicationController.convert_with_links(new_rc)
 
-    @policy.enforce_wsgi("rc", "update")
     @wsme.validate(types.uuid, [ReplicationControllerPatchType])
     @expose.expose(ReplicationController, types.uuid_or_name,
                    types.uuid_or_name, body=[ReplicationControllerPatchType])
+    @policy.enforce_wsgi("rc", "update")
+    @validation.enforce_bay_types('kubernetes')
     def patch(self, rc_ident, bay_ident, patch):
         """Update an existing rc.
 
@@ -323,9 +328,10 @@ class ReplicationControllersController(rest.RestController):
                                                 rc.manifest)
         return ReplicationController.convert_with_links(rpc_rc)
 
-    @policy.enforce_wsgi("rc")
     @expose.expose(None, types.uuid_or_name,
                    types.uuid_or_name, status_code=204)
+    @policy.enforce_wsgi("rc")
+    @validation.enforce_bay_types('kubernetes')
     def delete(self, rc_ident, bay_ident):
         """Delete a ReplicationController.
 

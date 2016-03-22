@@ -10,12 +10,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-
 import mock
 
 from magnum.api.controllers.v1 import magnum_services as mservice
 from magnum.api import servicegroup as servicegroup
-from magnum.conductor import api as rpcapi
+from magnum import objects
 from magnum.tests import base
 from magnum.tests.unit.api import base as api_base
 from magnum.tests.unit.api import utils as apiutils
@@ -61,7 +60,7 @@ class TestMagnumServiceController(api_base.FunctionalTest):
             reclist.append(rec)
         return reclist
 
-    @mock.patch.object(rpcapi.API, 'magnum_services_list')
+    @mock.patch.object(objects.MagnumService, 'list')
     @mock.patch.object(servicegroup.ServiceGroup, 'service_is_up')
     def test_get_one(self, svc_up, rpc_patcher):
         rpc_patcher.return_value = self._rpc_api_reply()
@@ -71,7 +70,7 @@ class TestMagnumServiceController(api_base.FunctionalTest):
         self.assertEqual(1, len(response['mservices']))
         self.assertEqual(1, response['mservices'][0]['id'])
 
-    @mock.patch.object(rpcapi.API, 'magnum_services_list')
+    @mock.patch.object(objects.MagnumService, 'list')
     @mock.patch.object(servicegroup.ServiceGroup, 'service_is_up')
     def test_get_many(self, svc_up, rpc_patcher):
         svc_num = 5
@@ -83,3 +82,20 @@ class TestMagnumServiceController(api_base.FunctionalTest):
         for i in range(svc_num):
             elem = response['mservices'][i]
             self.assertEqual(i + 1, elem['id'])
+
+
+class TestMagnumServiceEnforcement(api_base.FunctionalTest):
+
+    def _common_policy_check(self, rule, func, *arg, **kwarg):
+        self.policy.set_rules({rule: 'project:non_fake'})
+        response = func(*arg, **kwarg)
+        self.assertEqual(403, response.status_int)
+        self.assertEqual('application/json', response.content_type)
+        self.assertTrue(
+            "Policy doesn't allow %s to be performed." % rule,
+            response.json['errors'][0]['detail'])
+
+    def test_policy_disallow_get_all(self):
+        self._common_policy_check(
+            'magnum-service:get_all', self.get_json,
+            '/mservices', expect_errors=True)

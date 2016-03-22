@@ -283,12 +283,20 @@ class InvalidDiscoveryURL(Invalid):
                 "discovery endpoint '%(discovery_endpoint)s'.")
 
 
+class GetDiscoveryUrlFailed(MagnumException):
+    message = _("Failed to get discovery url from '%(discovery_endpoint)s'.")
+
+
 class InvalidUuidOrName(Invalid):
     message = _("Expected a name or uuid but received %(uuid)s.")
 
 
 class InvalidIdentity(Invalid):
     message = _("Expected an uuid or int but received %(identity)s.")
+
+
+class InvalidCsr(Invalid):
+    message = _("Received invalid csr %(csr)s.")
 
 
 class HTTPNotFound(ResourceNotFound):
@@ -310,11 +318,6 @@ class InvalidParameterValue(Invalid):
     message = _("%(err)s")
 
 
-class InstanceAssociated(Conflict):
-    message = _("Instance %(instance_uuid)s is already associated with a node,"
-                " it cannot be associated with this other node %(node)s")
-
-
 class InstanceNotFound(ResourceNotFound):
     message = _("Instance %(instance)s could not be found.")
 
@@ -326,6 +329,10 @@ class PatchError(Invalid):
 class NotAuthorized(MagnumException):
     message = _("Not authorized.")
     code = 403
+
+
+class PolicyNotAuthorized(NotAuthorized):
+    message = _("Policy doesn't allow %(action)s to be performed.")
 
 
 class NotAcceptable(MagnumException):
@@ -341,18 +348,6 @@ class InvalidMAC(Invalid):
 
 class ConfigInvalid(MagnumException):
     message = _("Invalid configuration file. %(error_msg)s")
-
-
-class NodeAlreadyExists(Conflict):
-    message = _("A node with UUID %(uuid)s already exists.")
-
-
-class NodeNotFound(ResourceNotFound):
-    message = _("Node %(node)s could not be found.")
-
-
-class NodeAssociated(InvalidState):
-    message = _("Node %(node)s is associated with instance %(instance)s.")
 
 
 class SSHConnectFailed(MagnumException):
@@ -385,7 +380,7 @@ class BayNotFound(ResourceNotFound):
 
 
 class BayAlreadyExists(Conflict):
-    message = _("A node with UUID %(uuid)s already exists.")
+    message = _("A bay with UUID %(uuid)s already exists.")
 
 
 class ContainerNotFound(ResourceNotFound):
@@ -401,7 +396,15 @@ class PodNotFound(ResourceNotFound):
 
 
 class PodAlreadyExists(Conflict):
-    message = _("A node with UUID %(uuid)s already exists.")
+    message = _("A pod with UUID %(uuid)s already exists.")
+
+
+class PodListNotFound(ResourceNotFound):
+    message = _("Pod list could not be found for Bay %(bay_uuid)s.")
+
+
+class PodCreationFailed(Invalid):
+    message = _("Pod creation failed in Bay %(bay_uuid)s.")
 
 
 class ReplicationControllerNotFound(ResourceNotFound):
@@ -427,7 +430,15 @@ class ServiceNotFound(ResourceNotFound):
 
 
 class ServiceAlreadyExists(Conflict):
-    message = _("A node with UUID %(uuid)s already exists.")
+    message = _("A service with UUID %(uuid)s already exists.")
+
+
+class ServiceListNotFound(ResourceNotFound):
+    message = _("Service list could not be found for Bay %(bay_uuid)s.")
+
+
+class ServiceCreationFailed(Invalid):
+    message = _("Service creation failed for Bay %(bay_uuid)s.")
 
 
 class ContainerException(Exception):
@@ -462,7 +473,9 @@ class OperationInProgress(Invalid):
 
 
 class ImageNotFound(ResourceNotFound):
+    """The code here changed to 400 according to the latest document."""
     message = _("Image %(image_id)s could not be found.")
+    code = 400
 
 
 class ImageNotAuthorized(MagnumException):
@@ -470,7 +483,9 @@ class ImageNotAuthorized(MagnumException):
 
 
 class OSDistroFieldNotFound(ResourceNotFound):
+    """The code here changed to 400 according to the latest document."""
     message = _("Image %(image_id)s doesn't contain os_distro field.")
+    code = 400
 
 
 class KubernetesAPIFailed(MagnumException):
@@ -516,3 +531,41 @@ class MagnumServiceAlreadyExists(Conflict):
 
 class UnsupportedK8sMemoryFormat(MagnumException):
     message = _("Unsupported memory format for k8s bay.")
+
+
+class FlavorNotFound(ResourceNotFound):
+    """The code here changed to 400 according to the latest document."""
+    message = _("Unable to find flavor %(flavor)s.")
+    code = 400
+
+
+class NetworkNotFound(ResourceNotFound):
+    """The code here changed to 400 according to the latest document."""
+    message = _("Unable to find network %(network)s.")
+    code = 400
+
+
+class TrustCreateFailed(MagnumException):
+    message = _("Failed to create trust for trustee %(trustee_user_id)s.")
+
+
+class TrustDeleteFailed(MagnumException):
+    message = _("Failed to delete trust %(trust_id)s.")
+
+
+class TrusteeCreateFailed(MagnumException):
+    message = _("Failed to create trustee %(username)s "
+                "in domain %(domain_id)s")
+
+
+class TrusteeDeleteFailed(MagnumException):
+    message = _("Failed to delete trustee %(trustee_id)s")
+
+
+class QuotaAlreadyExists(Conflict):
+    message = _("Quota for project %(project_id)s already exists "
+                "for resource %(resource)s.")
+
+
+class RegionsListFailed(MagnumException):
+    message = _("Failed to list regions.")

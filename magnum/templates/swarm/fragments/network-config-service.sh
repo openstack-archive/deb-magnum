@@ -2,6 +2,8 @@
 
 . /etc/sysconfig/heat-params
 
+echo "Configuring ${NETWORK_DRIVER} network ..."
+
 if [ "$NETWORK_DRIVER" != "flannel" ]; then
     exit 0
 fi
@@ -12,7 +14,7 @@ FLANNEL_CONFIG_SERVICE=/etc/systemd/system/flannel-config.service
 FLANNEL_JSON=/etc/sysconfig/flannel-network.json
 
 sed -i '
-/^FLANNEL_ETCD=/ s|=.*|="http://'"$SWARM_MASTER_IP"':2379"|
+/^FLANNEL_ETCD=/ s|=.*|="http://'"$ETCD_SERVER_IP"':2379"|
 ' $FLANNELD_CONFIG
 
 . $FLANNELD_CONFIG

@@ -33,18 +33,11 @@ def get_test_baymodel(**kw):
                                       'd1f02cfb-d27f-4068-9332-84d907cb0e2e'),
         'fixed_network': kw.get('fixed_network', 'private'),
         'network_driver': kw.get('network_driver'),
+        'volume_driver': kw.get('volume_driver'),
         'dns_nameserver': kw.get('dns_nameserver', '8.8.1.1'),
         'apiserver_port': kw.get('apiserver_port', 8080),
         'docker_volume_size': kw.get('docker_volume_size', 20),
         'cluster_distro': kw.get('cluster_distro', 'fedora-atomic'),
-        'ssh_authorized_key': kw.get('ssh_authorized_key',
-                                     'ssh-rsa AAAAB3NzaC1ycEAAAADA'
-                                     'v0XRqg3tm+jlsOKGO81lPDH+KaSJ'
-                                     'Q7wvmjUqszP/H6NC/m+qiGp/sTis'
-                                     'DYucqbeuM7nmJi+8Hb55y1xWoOZI'
-                                     'KMa71G5/4EOQxuQ/sgW965OOO2Hq'
-                                     'X8vjlQUnTK0HijrbSTLxp/9kazWW'
-                                     'FrfsdB8RtAAA test1234@magnum'),
         'coe': kw.get('coe', 'swarm'),
         'created_at': kw.get('created_at'),
         'updated_at': kw.get('updated_at'),
@@ -89,6 +82,7 @@ def get_test_bay(**kw):
         'stack_id': kw.get('stack_id', '047c6319-7abd-4bd9-a033-8c6af0173cd0'),
         'status': kw.get('status', 'CREATE_IN_PROGRESS'),
         'status_reason': kw.get('status_reason', 'Completed successfully'),
+        'bay_create_timeout': kw.get('bay_create_timeout', 0),
         'api_address': kw.get('api_address', '172.17.2.3'),
         'node_addresses': kw.get('node_addresses', ['172.17.2.4']),
         'node_count': kw.get('node_count', 3),
@@ -179,35 +173,6 @@ def create_test_service(**kw):
     return dbapi.create_service(service)
 
 
-def get_test_node(**kw):
-    return {
-        'id': kw.get('id', 42),
-        'uuid': kw.get('uuid', 'ea8e2a25-2901-438d-8157-de7ffd68d051'),
-        'type': kw.get('type', 'virt'),
-        'project_id': kw.get('project_id', 'fake_project'),
-        'user_id': kw.get('user_id', 'fake_user'),
-        'image_id': kw.get('image_id', 'ubuntu'),
-        'ironic_node_id': kw.get('ironic_node_id'),
-        'created_at': kw.get('created_at'),
-        'updated_at': kw.get('updated_at'),
-    }
-
-
-def create_test_node(**kw):
-    """Create test node entry in DB and return Node DB object.
-
-    Function to be used to create test Node objects in the database.
-    :param kw: kwargs with overriding values for node's attributes.
-    :returns: Test Node DB object.
-    """
-    node = get_test_node(**kw)
-    # Let DB generate ID if it isn't specified explicitly
-    if 'id' not in kw:
-        del node['id']
-    dbapi = db_api.get_instance()
-    return dbapi.create_node(node)
-
-
 def get_test_container(**kw):
     return {
         'id': kw.get('id', 42),
@@ -222,6 +187,7 @@ def get_test_container(**kw):
         'bay_uuid': kw.get('bay_uuid', 'fff114da-3bfa-4a0f-a123-c0dffad9718e'),
         'status': kw.get('state', 'Running'),
         'memory': kw.get('memory', '512m'),
+        'environment': kw.get('environment', {'key1': 'val1', 'key2': 'val2'}),
     }
 
 
@@ -272,15 +238,6 @@ def create_test_rc(**kw):
         del replication_controller['id']
     dbapi = db_api.get_instance()
     return dbapi.create_rc(replication_controller)
-
-
-def get_test_baylock(**kw):
-    return {
-        'id': kw.get('id', 42),
-        'bay_uuid': kw.get('bay_uuid', '5d12f6fd-a196-4bf0-ae4c-1f639a523a52'),
-        'conductor_id': kw.get('conductor_id',
-                               '72625085-c507-4410-9b28-cd7cf1fbf1ad'),
-    }
 
 
 def get_test_x509keypair(**kw):
@@ -343,3 +300,28 @@ def create_test_magnum_service(**kw):
         del magnum_service['id']
     dbapi = db_api.get_instance()
     return dbapi.create_magnum_service(magnum_service)
+
+
+def get_test_quotas(**kw):
+    return {
+        'id': kw.get('', 18),
+        'project_id': kw.get('project_id', 'fake_project'),
+        'resource': kw.get('resource', 'fake_resource'),
+        'hard_limit': kw.get('hard_limit', 10),
+        'created_at': kw.get('created_at'),
+        'updated_at': kw.get('updated_at'),
+    }
+
+
+def create_test_quotas(**kw):
+    """Create test quotas entry in DB and return quotas DB object.
+
+    :param kw: kwargs with overriding values for quota attributes.
+    :returns: Test quotas DB object.
+    """
+    quotas = get_test_quotas(**kw)
+    # Let DB generate ID if it isn't specified explicitly
+    if 'id' not in kw:
+        del quotas['id']
+    dbapi = db_api.get_instance()
+    return dbapi.create_quota(quotas)

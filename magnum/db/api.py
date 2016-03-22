@@ -122,41 +122,6 @@ class Connection(object):
         """
 
     @abc.abstractmethod
-    def create_bay_lock(self, bay_uuid, conductor_id):
-        """Create a new baylock.
-
-        This method will fail if the bay has already been locked.
-
-        :param bay_uuid: The uuid of a bay.
-        :param conductor_id: The id of a conductor.
-        :returns: None if success.
-                  Otherwise, the id of the conductor that locks the bay.
-        """
-
-    @abc.abstractmethod
-    def steal_bay_lock(self, bay_uuid, old_conductor_id, new_conductor_id):
-        """Steal lock of a bay.
-
-        Lock the bay with new_conductor_id if the bay is currently locked by
-        old_conductor_id.
-
-        :param bay_uuid: The uuid of a bay.
-        :param old_conductor_id: The id of the old conductor.
-        :param new_conductor_id: The id of the new conductor.
-        :returns: None if success. True if the bay is not locked.
-                  Otherwise, the id of the conductor that locks the bay.
-        """
-
-    @abc.abstractmethod
-    def release_bay_lock(self, bay_uuid, conductor_id):
-        """Release lock of a bay.
-
-        :param bay_uuid: The uuid of a bay.
-        :param conductor_id: The id of a conductor.
-        :returns: None if success. True otherwise.
-        """
-
-    @abc.abstractmethod
     def get_baymodel_list(self, context, filters=None,
                           limit=None, marker=None, sort_key=None,
                           sort_dir=None):
@@ -320,81 +285,9 @@ class Connection(object):
 
         :param container_id: The id or uuid of a container.
         :returns: A container.
-        :raises: BayNotFound
+        :raises: ContainerNotFound
         """
 
-    @abc.abstractmethod
-    def get_node_list(self, context, filters=None, limit=None,
-                      marker=None, sort_key=None, sort_dir=None):
-        """Get for matching nodes.
-
-        Return a list of the specified columns for all nodes that match the
-        specified filters.
-
-        :param context: The security context
-        :param filters: Filters to apply. Defaults to None.
-
-        :param limit: Maximum number of nodes to return.
-        :param marker: the last item of the previous page; we return the next
-                       result set.
-        :param sort_key: Attribute by which results should be sorted.
-        :param sort_dir: direction in which results should be sorted.
-                         (asc, desc)
-        :returns: A list of tuples of the specified columns.
-        """
-
-    @abc.abstractmethod
-    def create_node(self, values):
-        """Create a new node.
-
-        :param values: A dict containing several items used to identify
-                       and track the node, and several dicts which are passed
-                       into the Drivers when managing this node. For example:
-
-                       ::
-
-                        {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'type': 'virt'
-                        }
-        :returns: A node.
-        """
-
-    @abc.abstractmethod
-    def get_node_by_id(self, context, node_id):
-        """Return a node.
-
-        :param context: The security context
-        :param node_id: The id of a node.
-        :returns: A node.
-        """
-
-    @abc.abstractmethod
-    def get_node_by_uuid(self, context, node_uuid):
-        """Return a node.
-
-        :param context: The security context
-        :param node_uuid: The uuid of a node.
-        :returns: A node.
-        """
-
-    @abc.abstractmethod
-    def destroy_node(self, node_id):
-        """Destroy a node and all associated interfaces.
-
-        :param node_id: The id or uuid of a node.
-        """
-
-    @abc.abstractmethod
-    def update_node(self, node_id, values):
-        """Update properties of a node.
-
-        :param node_id: The id or uuid of a node.
-        :returns: A node.
-        :raises: NodeAssociated
-        :raises: NodeNotFound
-        """
     @abc.abstractmethod
     def get_pod_list(self, context, filters=None, limit=None,
                      marker=None, sort_key=None, sort_dir=None):
@@ -472,7 +365,7 @@ class Connection(object):
 
         :param pod_id: The id or uuid of a pod.
         :returns: A pod.
-        :raises: BayNotFound
+        :raises: PodNotFound
         """
 
     @abc.abstractmethod
@@ -554,7 +447,7 @@ class Connection(object):
 
         :param service_id: The id or uuid of a service.
         :returns: A service.
-        :raises: BayNotFound
+        :raises: ServiceNotFound
         """
 
     @abc.abstractmethod
@@ -777,4 +670,32 @@ class Connection(object):
         :param sort_dir: direction in which results should be sorted.
                          (asc, desc)
         :returns: A list of tuples of the specified columns.
+        """
+
+    @abc.abstractmethod
+    def create_quota(self, values):
+        """Create a new Quota record for a resource in a project.
+
+        :param values: A dict containing several items used to identify
+                       and track quota for a resource in a project.
+
+                       ::
+
+                        {
+                         'id': utils.generate_uuid(),
+                         'project_id': 'fake_project',
+                         'resource': 'fake_resource',
+                         'hard_limit': 'fake_hardlimit',
+                        }
+
+        :returns: A quota record.
+        """
+
+    @abc.abstractmethod
+    def quota_get_all_by_project_id(self, project_id):
+        """Gets Quota record for all the resources in a project.
+
+        :param project_id: Project identifier of the project.
+
+        :returns: Quota record for all resources in a project.
         """

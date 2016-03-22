@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Copyright 2014 NEC Corporation.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -11,9 +13,14 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
+import six
 import uuid
 
 from heatclient import exc
+import mock
+from mock import patch
+from oslo_config import cfg
 from oslo_service import loopingcall
 
 from magnum.common import exception
@@ -23,10 +30,6 @@ from magnum.objects.fields import BayStatus as bay_status
 from magnum.tests import base
 from magnum.tests.unit.db import base as db_base
 from magnum.tests.unit.db import utils
-
-import mock
-from mock import patch
-from oslo_config import cfg
 
 
 class TestHandler(db_base.DbTestCase):
@@ -40,6 +43,23 @@ class TestHandler(db_base.DbTestCase):
         bay_dict = utils.get_test_bay(node_count=1)
         self.bay = objects.Bay(self.context, **bay_dict)
         self.bay.create()
+
+        self.p = patch(
+            'magnum.conductor.handlers.bay_conductor.Handler.'
+            '_create_trustee_and_trust')
+
+        def create_trustee_and_trust(osc, bay):
+            bay.trust_id = 'trust_id'
+            bay.trustee_username = 'user_name'
+            bay.trustee_user_id = 'user_id'
+            bay.trustee_password = 'password'
+
+        self.p.side_effect = create_trustee_and_trust
+        self.p.start()
+
+    def tearDown(self):
+        self.p.stop()
+        super(TestHandler, self).tearDown()
 
     @patch('magnum.conductor.scale_manager.ScaleManager')
     @patch('magnum.conductor.handlers.bay_conductor.Handler._poll_and_check')
@@ -93,24 +113,54 @@ class TestHandler(db_base.DbTestCase):
         bay = objects.Bay.get(self.context, self.bay.uuid)
         self.assertEqual(1, bay.node_count)
 
+    @patch('magnum.conductor.scale_manager.ScaleManager')
+    @patch('magnum.conductor.handlers.bay_conductor.Handler._poll_and_check')
+    @patch('magnum.conductor.handlers.bay_conductor._update_stack')
     @patch('magnum.common.clients.OpenStackClients')
-    def test_update_bay_with_invalid_params(
-            self, mock_openstack_client_class):
+    def _test_update_bay_status_complete(
+            self, expect_status, mock_openstack_client_class,
+            mock_update_stack, mock_poll_and_check,
+            mock_scale_manager):
+        def side_effect(*args, **kwargs):
+            self.bay.node_count = 2
+            self.bay.save()
+        mock_poll_and_check.side_effect = side_effect
         mock_heat_stack = mock.MagicMock()
-        mock_heat_stack.stack_status = bay_status.CREATE_COMPLETE
+        mock_heat_stack.stack_status = expect_status
         mock_heat_client = mock.MagicMock()
         mock_heat_client.stacks.get.return_value = mock_heat_stack
         mock_openstack_client = mock_openstack_client_class.return_value
         mock_openstack_client.heat.return_value = mock_heat_client
 
         self.bay.node_count = 2
-        self.bay.api_address = '7.7.7.7'
-        self.assertRaises(exception.InvalidParameterValue,
-                          self.handler.bay_update,
-                          self.context,
-                          self.bay)
+        self.handler.bay_update(self.context, self.bay)
+
+        mock_update_stack.assert_called_once_with(
+            self.context, mock_openstack_client, self.bay,
+            mock_scale_manager.return_value)
         bay = objects.Bay.get(self.context, self.bay.uuid)
-        self.assertEqual(1, bay.node_count)
+        self.assertEqual(2, bay.node_count)
+
+    def test_update_bay_status_update_compelete(self):
+        self._test_update_bay_status_complete(bay_status.UPDATE_COMPLETE)
+
+    def test_update_bay_status_resume_compelete(self):
+        self._test_update_bay_status_complete(bay_status.RESUME_COMPLETE)
+
+    def test_update_bay_status_restore_compelete(self):
+        self._test_update_bay_status_complete(bay_status.RESTORE_COMPLETE)
+
+    def test_update_bay_status_rollback_compelete(self):
+        self._test_update_bay_status_complete(bay_status.ROLLBACK_COMPLETE)
+
+    def test_update_bay_status_snapshot_compelete(self):
+        self._test_update_bay_status_complete(bay_status.SNAPSHOT_COMPLETE)
+
+    def test_update_bay_status_check_compelete(self):
+        self._test_update_bay_status_complete(bay_status.CHECK_COMPLETE)
+
+    def test_update_bay_status_adopt_compelete(self):
+        self._test_update_bay_status_complete(bay_status.ADOPT_COMPLETE)
 
     @patch('magnum.conductor.handlers.bay_conductor.HeatPoller')
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
@@ -134,14 +184,25 @@ class TestHandler(db_base.DbTestCase):
 
         mock_create_stack.side_effect = create_stack_side_effect
 
-        self.handler.bay_create(self.context,
-                                self.bay, timeout)
+        # FixMe(eliqiao): bay_create will call bay.create() again, this so bad
+        # because we have already called it in setUp since other test case will
+        # share the codes in setUp()
+        # But in self.handler.bay_create, we update bay.uuid and bay.stack_id
+        # so bay.create will create a new recored with baymodel_id None,
+        # this is bad because we load BayModel object in Bay object by
+        # baymodel_id. Here update self.bay.baymodel_id so bay.obj_get_changes
+        # will get notice that baymodel_id is updated and will update it
+        # in db.
+        self.bay.baymodel_id = self.baymodel.uuid
+        bay = self.handler.bay_create(self.context,
+                                      self.bay, timeout)
 
         mock_create_stack.assert_called_once_with(self.context,
                                                   mock.sentinel.osc,
                                                   self.bay, timeout)
         mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
             self.bay)
+        self.assertEqual(bay_status.CREATE_IN_PROGRESS, bay.status)
 
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
     @patch('magnum.conductor.handlers.bay_conductor._create_stack')
@@ -157,6 +218,27 @@ class TestHandler(db_base.DbTestCase):
         mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
             self.bay)
         mock_cert_manager.delete_certificates_from_bay(self.bay)
+
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.conductor.handlers.bay_conductor._create_stack')
+    @patch('magnum.conductor.handlers.bay_conductor.uuid')
+    def test_create_with_invalid_unicode_name(self,
+                                              mock_uuid,
+                                              mock_create_stack,
+                                              mock_cert_manager):
+        timeout = 15
+        test_uuid = uuid.uuid4()
+        mock_uuid.uuid4.return_value = test_uuid
+        error_message = six.u("""Invalid stack name 测试集群-zoyh253geukk
+                              must contain only alphanumeric or "_-."
+                              characters, must start with alpha""")
+        mock_create_stack.side_effect = exc.HTTPBadRequest(error_message)
+
+        self.assertRaises(exception.InvalidParameterValue,
+                          self.handler.bay_create, self.context,
+                          self.bay, timeout)
+        mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
+            self.bay)
 
     @patch('magnum.common.clients.OpenStackClients')
     def test_bay_delete(self, mock_openstack_client_class):

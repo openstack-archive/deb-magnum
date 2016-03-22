@@ -14,12 +14,9 @@
 
 """Magnum common internal object model"""
 
-from oslo_log import log as logging
 from oslo_versionedobjects import base as ovoo_base
 from oslo_versionedobjects import fields as ovoo_fields
 
-
-LOG = logging.getLogger('object')
 
 remotable_classmethod = ovoo_base.remotable_classmethod
 remotable = ovoo_base.remotable
@@ -43,9 +40,9 @@ class MagnumObject(ovoo_base.VersionedObject):
     OBJ_PROJECT_NAMESPACE = 'magnum'
 
     def as_dict(self):
-        return dict((k, getattr(self, k))
-                    for k in self.fields
-                    if hasattr(self, k))
+        return {k: getattr(self, k)
+                for k in self.fields
+                if self.obj_attr_is_set(k)}
 
 
 class MagnumObjectDictCompat(ovoo_base.VersionedObjectDictCompat):

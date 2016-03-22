@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 import abc
-import uuid
 
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -49,13 +48,9 @@ template_def_opts = [
     cfg.StrOpt('etcd_discovery_service_endpoint_format',
                default='https://discovery.etcd.io/new?size=%(size)d',
                help=_('Url for etcd public discovery endpoint.')),
-    cfg.StrOpt('coreos_discovery_token_url',
-               deprecated_name='discovery_token_url',
-               deprecated_group='bay_heat',
-               help=_('coreos discovery token url.')),
     cfg.StrOpt('swarm_atomic_template_path',
                default=paths.basedir_def('templates/swarm/'
-                                         'swarm.yaml'),
+                                         'swarmcluster.yaml'),
                help=_('Location of template to build a swarm '
                       'cluster on atomic.')),
     cfg.StrOpt('mesos_ubuntu_template_path',
@@ -69,7 +64,9 @@ template_def_opts = [
                 help=_('Enabled bay definition entry points.')),
 ]
 
-cfg.CONF.register_opts(template_def_opts, group='bay')
+CONF = cfg.CONF
+CONF.register_opts(template_def_opts, group='bay')
+CONF.import_opt('trustee_domain_id', 'magnum.common.keystone', group='trust')
 
 
 class ParameterMapping(object):
@@ -135,7 +132,7 @@ class OutputMapping(object):
         return self.heat_output == output_key
 
     def get_output_value(self, stack):
-        for output in stack.outputs:
+        for output in stack.to_dict().get('outputs', []):
             if output['output_key'] == self.heat_output:
                 return output['output_value']
 
@@ -339,18 +336,32 @@ class BaseTemplateDefinition(TemplateDefinition):
                            baymodel_attr='image_id')
         self.add_parameter('dns_nameserver',
                            baymodel_attr='dns_nameserver')
-        self.add_parameter('fixed_network_cidr',
-                           baymodel_attr='fixed_network')
         self.add_parameter('http_proxy',
                            baymodel_attr='http_proxy')
         self.add_parameter('https_proxy',
                            baymodel_attr='https_proxy')
         self.add_parameter('no_proxy',
                            baymodel_attr='no_proxy')
+        self.add_parameter('number_of_masters',
+                           bay_attr='master_count')
 
     @abc.abstractproperty
     def template_path(self):
         pass
+
+    def get_params(self, context, baymodel, bay, **kwargs):
+        extra_params = kwargs.pop('extra_params', {})
+        extra_params['trustee_domain_id'] = CONF.trust.trustee_domain_id
+        extra_params['trustee_user_id'] = bay.trustee_user_id
+        extra_params['trustee_username'] = bay.trustee_username
+        extra_params['trustee_password'] = bay.trustee_password
+        extra_params['trust_id'] = bay.trust_id
+        extra_params['auth_url'] = context.auth_url
+
+        return super(BaseTemplateDefinition,
+                     self).get_params(context, baymodel, bay,
+                                      extra_params=extra_params,
+                                      **kwargs)
 
     def _get_user_token(self, context, osc, bay):
         """Retrieve user token from the Heat stack or context.
@@ -365,6 +376,27 @@ class BaseTemplateDefinition(TemplateDefinition):
             return stack.parameters['user_token']
         else:
             return context.auth_token
+
+    def get_discovery_url(self, bay):
+        if hasattr(bay, 'discovery_url') and bay.discovery_url:
+            discovery_url = bay.discovery_url
+        else:
+            discovery_endpoint = (
+                cfg.CONF.bay.etcd_discovery_service_endpoint_format %
+                {'size': bay.master_count})
+            try:
+                discovery_url = requests.get(discovery_endpoint).text
+            except Exception as err:
+                LOG.error(six.text_type(err))
+                raise exception.GetDiscoveryUrlFailed(
+                    discovery_endpoint=discovery_endpoint)
+            if not discovery_url:
+                raise exception.InvalidDiscoveryURL(
+                    discovery_url=discovery_url,
+                    discovery_endpoint=discovery_endpoint)
+            else:
+                bay.discovery_url = discovery_url
+        return discovery_url
 
 
 class K8sApiAddressOutputMapping(OutputMapping):
@@ -408,32 +440,17 @@ class SwarmApiAddressOutputMapping(OutputMapping):
             setattr(bay, self.bay_attr, output_value)
 
 
-class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
-    """Kubernetes template for a Fedora Atomic VM."""
-
-    provides = [
-        {'server_type': 'vm',
-         'os': 'fedora-atomic',
-         'coe': 'kubernetes'},
-    ]
+class K8sTemplateDefinition(BaseTemplateDefinition):
+    """Base Kubernetes template."""
 
     def __init__(self):
-        super(AtomicK8sTemplateDefinition, self).__init__()
-        self.add_parameter('bay_uuid',
-                           bay_attr='uuid',
-                           param_type=str)
+        super(K8sTemplateDefinition, self).__init__()
         self.add_parameter('master_flavor',
                            baymodel_attr='master_flavor_id')
         self.add_parameter('minion_flavor',
                            baymodel_attr='flavor_id')
         self.add_parameter('number_of_minions',
-                           bay_attr='node_count',
-                           param_type=str)
-        self.add_parameter('number_of_masters',
-                           bay_attr='master_count',
-                           param_type=str)
-        self.add_parameter('docker_volume_size',
-                           baymodel_attr='docker_volume_size')
+                           bay_attr='node_count')
         self.add_parameter('external_network',
                            baymodel_attr='external_network_id',
                            required=True)
@@ -455,26 +472,8 @@ class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
         self.add_output('kube_masters',
                         bay_attr='master_addresses')
 
-    def get_discovery_url(self, bay):
-        if hasattr(bay, 'discovery_url') and bay.discovery_url:
-            discovery_url = bay.discovery_url
-        else:
-            discovery_endpoint = (
-                cfg.CONF.bay.etcd_discovery_service_endpoint_format %
-                {'size': bay.master_count})
-            discovery_url = requests.get(discovery_endpoint).text
-            if not discovery_url:
-                raise exception.InvalidDiscoveryURL(
-                    discovery_url=discovery_url,
-                    discovery_endpoint=discovery_endpoint)
-            else:
-                bay.discovery_url = discovery_url
-        return discovery_url
-
     def get_params(self, context, baymodel, bay, **kwargs):
         extra_params = kwargs.pop('extra_params', {})
-        label_list = ['flannel_network_cidr', 'flannel_use_vxlan',
-                      'flannel_network_subnetlen']
         scale_mgr = kwargs.pop('scale_manager', None)
         if scale_mgr:
             hosts = self.get_output('kube_minions')
@@ -482,8 +481,38 @@ class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
                 scale_mgr.get_removal_nodes(hosts))
 
         extra_params['discovery_url'] = self.get_discovery_url(bay)
-        # Kubernetes backend code is still using v2 API
-        extra_params['auth_url'] = context.auth_url.replace("v3", "v2")
+
+        label_list = ['flannel_network_cidr', 'flannel_use_vxlan',
+                      'flannel_network_subnetlen']
+        for label in label_list:
+            extra_params[label] = baymodel.labels.get(label)
+
+        return super(K8sTemplateDefinition,
+                     self).get_params(context, baymodel, bay,
+                                      extra_params=extra_params,
+                                      **kwargs)
+
+
+class AtomicK8sTemplateDefinition(K8sTemplateDefinition):
+    """Kubernetes template for a Fedora Atomic VM."""
+
+    provides = [
+        {'server_type': 'vm',
+         'os': 'fedora-atomic',
+         'coe': 'kubernetes'},
+    ]
+
+    def __init__(self):
+        super(AtomicK8sTemplateDefinition, self).__init__()
+        self.add_parameter('bay_uuid',
+                           bay_attr='uuid',
+                           param_type=str)
+        self.add_parameter('docker_volume_size',
+                           baymodel_attr='docker_volume_size')
+
+    def get_params(self, context, baymodel, bay, **kwargs):
+        extra_params = kwargs.pop('extra_params', {})
+
         extra_params['username'] = context.user_name
         extra_params['tenant_name'] = context.tenant
         osc = clients.OpenStackClients(context)
@@ -493,9 +522,6 @@ class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
         if baymodel.tls_disabled:
             extra_params['loadbalancing_protocol'] = 'HTTP'
             extra_params['kubernetes_port'] = 8080
-
-        for label in label_list:
-            extra_params[label] = baymodel.labels.get(label)
 
         return super(AtomicK8sTemplateDefinition,
                      self).get_params(context, baymodel, bay,
@@ -507,36 +533,12 @@ class AtomicK8sTemplateDefinition(BaseTemplateDefinition):
         return cfg.CONF.bay.k8s_atomic_template_path
 
 
-class CoreOSK8sTemplateDefinition(AtomicK8sTemplateDefinition):
+class CoreOSK8sTemplateDefinition(K8sTemplateDefinition):
     """Kubernetes template for CoreOS VM."""
 
     provides = [
         {'server_type': 'vm', 'os': 'coreos', 'coe': 'kubernetes'},
     ]
-
-    def __init__(self):
-        super(CoreOSK8sTemplateDefinition, self).__init__()
-        self.add_parameter('ssh_authorized_key',
-                           baymodel_attr='ssh_authorized_key')
-
-    @staticmethod
-    def get_token():
-        discovery_url = cfg.CONF.bay.coreos_discovery_token_url
-        if discovery_url:
-            coreos_token_url = requests.get(discovery_url)
-            token = str(coreos_token_url.text.split('/')[3])
-        else:
-            token = uuid.uuid4().hex
-        return token
-
-    def get_params(self, context, baymodel, bay, **kwargs):
-        extra_params = kwargs.pop('extra_params', {})
-        extra_params['token'] = self.get_token()
-
-        return super(CoreOSK8sTemplateDefinition,
-                     self).get_params(context, baymodel, bay,
-                                      extra_params=extra_params,
-                                      **kwargs)
 
     @property
     def template_path(self):
@@ -556,9 +558,10 @@ class AtomicSwarmTemplateDefinition(BaseTemplateDefinition):
                            bay_attr='uuid',
                            param_type=str)
         self.add_parameter('number_of_nodes',
-                           bay_attr='node_count',
-                           param_type=str)
-        self.add_parameter('server_flavor',
+                           bay_attr='node_count')
+        self.add_parameter('master_flavor',
+                           baymodel_attr='master_flavor_id')
+        self.add_parameter('node_flavor',
                            baymodel_attr='flavor_id')
         self.add_parameter('docker_volume_size',
                            baymodel_attr='docker_volume_size')
@@ -575,30 +578,14 @@ class AtomicSwarmTemplateDefinition(BaseTemplateDefinition):
                         mapping_type=SwarmApiAddressOutputMapping)
         self.add_output('swarm_master_private',
                         bay_attr=None)
-        self.add_output('swarm_master',
-                        bay_attr=None)
+        self.add_output('swarm_masters',
+                        bay_attr='master_addresses')
         self.add_output('swarm_nodes_private',
                         bay_attr=None)
         self.add_output('swarm_nodes',
                         bay_attr='node_addresses')
         self.add_output('discovery_url',
                         bay_attr='discovery_url')
-
-    def get_discovery_url(self, bay):
-        if hasattr(bay, 'discovery_url') and bay.discovery_url:
-            discovery_url = bay.discovery_url
-        else:
-            discovery_endpoint = (
-                cfg.CONF.bay.etcd_discovery_service_endpoint_format %
-                {'size': 1})
-            discovery_url = requests.get(discovery_endpoint).text
-            if not discovery_url:
-                raise exception.InvalidDiscoveryURL(
-                    discovery_url=discovery_url,
-                    discovery_endpoint=discovery_endpoint)
-            else:
-                bay.discovery_url = discovery_url
-        return discovery_url
 
     def get_params(self, context, baymodel, bay, **kwargs):
         extra_params = kwargs.pop('extra_params', {})
@@ -639,12 +626,15 @@ class UbuntuMesosTemplateDefinition(BaseTemplateDefinition):
                            baymodel_attr='external_network_id',
                            required=True)
         self.add_parameter('number_of_slaves',
-                           bay_attr='node_count',
-                           param_type=str)
+                           bay_attr='node_count')
         self.add_parameter('master_flavor',
                            baymodel_attr='master_flavor_id')
         self.add_parameter('slave_flavor',
                            baymodel_attr='flavor_id')
+        self.add_parameter('cluster_name',
+                           bay_attr='name')
+        self.add_parameter('volume_driver',
+                           baymodel_attr='volume_driver')
 
         self.add_output('api_address',
                         bay_attr='api_address')
@@ -656,6 +646,28 @@ class UbuntuMesosTemplateDefinition(BaseTemplateDefinition):
                         bay_attr=None)
         self.add_output('mesos_slaves',
                         bay_attr='node_addresses')
+
+    def get_params(self, context, baymodel, bay, **kwargs):
+        extra_params = kwargs.pop('extra_params', {})
+        # HACK(apmelton) - This uses the user's bearer token, ideally
+        # it should be replaced with an actual trust token with only
+        # access to do what the template needs it to do.
+        osc = clients.OpenStackClients(context)
+        extra_params['auth_url'] = context.auth_url
+        extra_params['username'] = context.user_name
+        extra_params['tenant_name'] = context.tenant
+        extra_params['domain_name'] = context.domain_name
+        extra_params['region_name'] = osc.cinder_region_name()
+
+        label_list = ['rexray_preempt']
+
+        for label in label_list:
+            extra_params[label] = baymodel.labels.get(label)
+
+        return super(UbuntuMesosTemplateDefinition,
+                     self).get_params(context, baymodel, bay,
+                                      extra_params=extra_params,
+                                      **kwargs)
 
     @property
     def template_path(self):

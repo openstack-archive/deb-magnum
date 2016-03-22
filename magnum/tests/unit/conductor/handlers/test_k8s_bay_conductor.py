@@ -11,13 +11,14 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from magnum.conductor.handlers import bay_conductor
-from magnum import objects
-from magnum.tests import base
 
 import mock
 from mock import patch
 from oslo_config import cfg
+
+from magnum.conductor.handlers import bay_conductor
+from magnum import objects
+from magnum.tests import base
 
 
 class TestBayConductorWithK8s(base.TestCase):
@@ -30,11 +31,9 @@ class TestBayConductorWithK8s(base.TestCase):
             'keypair_id': 'keypair_id',
             'dns_nameserver': 'dns_nameserver',
             'external_network_id': 'external_network_id',
-            'fixed_network': '10.20.30.0/24',
             'network_driver': 'network_driver',
             'docker_volume_size': 20,
             'cluster_distro': 'fedora-atomic',
-            'ssh_authorized_key': 'ssh_authorized_key',
             'coe': 'kubernetes',
             'token': None,
             'http_proxy': 'http_proxy',
@@ -59,7 +58,14 @@ class TestBayConductorWithK8s(base.TestCase):
             'master_addresses': ['172.17.2.18'],
             'ca_cert_ref': 'http://barbican/v1/containers/xx-xx-xx-xx',
             'magnum_cert_ref': 'http://barbican/v1/containers/xx-xx-xx-xx',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
         }
+        cfg.CONF.set_override('trustee_domain_id',
+                              '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+                              group='trust')
         self.context.auth_url = 'http://192.168.10.10:5000/v3'
         self.context.user_name = 'fake_user'
         self.context.tenant = 'fake_tenant'
@@ -100,7 +106,6 @@ class TestBayConductorWithK8s(base.TestCase):
             'image_id': 'server_image',
             'flavor_id': 'minion_flavor',
             'docker_volume_size': 'docker_volume_size',
-            'fixed_network': 'fixed_network_cidr',
             'network_driver': 'network_driver',
             'master_flavor_id': 'master_flavor',
             'apiserver_port': '',
@@ -126,9 +131,8 @@ class TestBayConductorWithK8s(base.TestCase):
             'server_image': 'image_id',
             'minion_flavor': 'flavor_id',
             'master_flavor': 'master_flavor_id',
-            'number_of_minions': '1',
-            'number_of_masters': '1',
-            'fixed_network_cidr': '10.20.30.0/24',
+            'number_of_minions': 1,
+            'number_of_masters': 1,
             'docker_volume_size': 20,
             'discovery_url': 'https://discovery.etcd.io/test',
             'flannel_network_cidr': '10.101.0.0/16',
@@ -137,31 +141,73 @@ class TestBayConductorWithK8s(base.TestCase):
             'http_proxy': 'http_proxy',
             'https_proxy': 'https_proxy',
             'no_proxy': 'no_proxy',
-            'auth_url': 'http://192.168.10.10:5000/v2',
             'tenant_name': 'fake_tenant',
             'username': 'fake_user',
             'user_token': 'fake_token',
             'bay_uuid': self.bay_dict['uuid'],
             'magnum_url': self.mock_osc.magnum_url.return_value,
             'tls_disabled': False,
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
         }
         if missing_attr is not None:
             expected.pop(mapping[missing_attr], None)
 
         self.assertEqual(expected, definition)
 
-    @patch('requests.get')
     @patch('magnum.objects.BayModel.get_by_uuid')
     def test_extract_template_definition_coreos_with_disovery(
             self,
+            mock_objects_baymodel_get_by_uuid):
+        self.baymodel_dict['cluster_distro'] = 'coreos'
+        baymodel = objects.BayModel(self.context, **self.baymodel_dict)
+        mock_objects_baymodel_get_by_uuid.return_value = baymodel
+        bay = objects.Bay(self.context, **self.bay_dict)
+
+        (template_path,
+         definition) = bay_conductor._extract_template_definition(self.context,
+                                                                  bay)
+
+        expected = {
+            'ssh_key_name': 'keypair_id',
+            'external_network': 'external_network_id',
+            'dns_nameserver': 'dns_nameserver',
+            'server_image': 'image_id',
+            'minion_flavor': 'flavor_id',
+            'master_flavor': 'master_flavor_id',
+            'number_of_minions': 1,
+            'number_of_masters': 1,
+            'network_driver': 'network_driver',
+            'discovery_url': 'https://discovery.etcd.io/test',
+            'http_proxy': 'http_proxy',
+            'https_proxy': 'https_proxy',
+            'no_proxy': 'no_proxy',
+            'flannel_network_cidr': '10.101.0.0/16',
+            'flannel_network_subnetlen': '26',
+            'flannel_use_vxlan': 'yes',
+            'tls_disabled': False,
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
+        }
+        self.assertEqual(expected, definition)
+
+    @patch('requests.get')
+    @patch('magnum.objects.BayModel.get_by_uuid')
+    def test_extract_template_definition_coreos_no_discoveryurl(
+            self,
             mock_objects_baymodel_get_by_uuid,
             reqget):
-        baymodel_dict = self.baymodel_dict
-        baymodel_dict['cluster_distro'] = 'coreos'
-        cfg.CONF.set_override('coreos_discovery_token_url',
-                              'http://tokentest',
-                              group='bay')
-        mock_req = mock.MagicMock(text='/h1/h2/h3')
+        self.baymodel_dict['cluster_distro'] = 'coreos'
+        self.bay_dict['discovery_url'] = None
+        mock_req = mock.MagicMock(text='http://tokentest/h1/h2/h3')
         reqget.return_value = mock_req
         baymodel = objects.BayModel(self.context, **self.baymodel_dict)
         mock_objects_baymodel_get_by_uuid.return_value = baymodel
@@ -178,79 +224,23 @@ class TestBayConductorWithK8s(base.TestCase):
             'server_image': 'image_id',
             'minion_flavor': 'flavor_id',
             'master_flavor': 'master_flavor_id',
-            'number_of_minions': '1',
-            'number_of_masters': '1',
-            'fixed_network_cidr': '10.20.30.0/24',
+            'number_of_minions': 1,
+            'number_of_masters': 1,
             'network_driver': 'network_driver',
-            'docker_volume_size': 20,
-            'ssh_authorized_key': 'ssh_authorized_key',
-            'token': 'h3',
-            'discovery_url': 'https://discovery.etcd.io/test',
+            'discovery_url': 'http://tokentest/h1/h2/h3',
             'http_proxy': 'http_proxy',
             'https_proxy': 'https_proxy',
             'no_proxy': 'no_proxy',
             'flannel_network_cidr': '10.101.0.0/16',
             'flannel_network_subnetlen': '26',
             'flannel_use_vxlan': 'yes',
-            'auth_url': 'http://192.168.10.10:5000/v2',
-            'tenant_name': 'fake_tenant',
-            'username': 'fake_user',
-            'user_token': 'fake_token',
-            'bay_uuid': self.bay_dict['uuid'],
-            'magnum_url': self.mock_osc.magnum_url.return_value,
             'tls_disabled': False,
-        }
-        self.assertEqual(expected, definition)
-
-    @patch('uuid.uuid4')
-    @patch('magnum.objects.BayModel.get_by_uuid')
-    def test_extract_template_definition_coreos_no_discoveryurl(
-            self,
-            mock_objects_baymodel_get_by_uuid,
-            mock_uuid):
-        baymodel_dict = self.baymodel_dict
-        baymodel_dict['cluster_distro'] = 'coreos'
-        cfg.CONF.set_override('coreos_discovery_token_url',
-                              None,
-                              group='bay')
-        mock_uuid.return_value = mock.MagicMock(
-            hex='ba3d1866282848ddbedc76112110c208')
-        baymodel = objects.BayModel(self.context, **self.baymodel_dict)
-        mock_objects_baymodel_get_by_uuid.return_value = baymodel
-        bay = objects.Bay(self.context, **self.bay_dict)
-
-        (template_path,
-         definition) = bay_conductor._extract_template_definition(self.context,
-                                                                  bay)
-
-        expected = {
-            'ssh_key_name': 'keypair_id',
-            'external_network': 'external_network_id',
-            'dns_nameserver': 'dns_nameserver',
-            'server_image': 'image_id',
-            'minion_flavor': 'flavor_id',
-            'master_flavor': 'master_flavor_id',
-            'number_of_minions': '1',
-            'number_of_masters': '1',
-            'fixed_network_cidr': '10.20.30.0/24',
-            'network_driver': 'network_driver',
-            'docker_volume_size': 20,
-            'ssh_authorized_key': 'ssh_authorized_key',
-            'token': 'ba3d1866282848ddbedc76112110c208',
-            'discovery_url': 'https://discovery.etcd.io/test',
-            'http_proxy': 'http_proxy',
-            'https_proxy': 'https_proxy',
-            'no_proxy': 'no_proxy',
-            'flannel_network_cidr': '10.101.0.0/16',
-            'flannel_network_subnetlen': '26',
-            'flannel_use_vxlan': 'yes',
-            'auth_url': 'http://192.168.10.10:5000/v2',
-            'tenant_name': 'fake_tenant',
-            'username': 'fake_user',
-            'user_token': 'fake_token',
-            'bay_uuid': self.bay_dict['uuid'],
-            'magnum_url': self.mock_osc.magnum_url.return_value,
-            'tls_disabled': False,
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
         }
         self.assertEqual(expected, definition)
 
@@ -287,66 +277,12 @@ class TestBayConductorWithK8s(base.TestCase):
             missing_attr='docker_volume_size')
 
     @patch('magnum.objects.BayModel.get_by_uuid')
-    def test_extract_template_definition_without_fixed_network(
-            self,
-            mock_objects_baymodel_get_by_uuid):
-        self._test_extract_template_definition(
-            mock_objects_baymodel_get_by_uuid,
-            missing_attr='fixed_network')
-
-    @patch('magnum.objects.BayModel.get_by_uuid')
     def test_extract_template_definition_without_master_flavor(
             self,
             mock_objects_baymodel_get_by_uuid):
         self._test_extract_template_definition(
             mock_objects_baymodel_get_by_uuid,
             missing_attr='master_flavor_id')
-
-    @patch('magnum.objects.BayModel.get_by_uuid')
-    def test_extract_template_definition_without_ssh_authorized_key(
-            self,
-            mock_objects_baymodel_get_by_uuid):
-        baymodel_dict = self.baymodel_dict
-        baymodel_dict['cluster_distro'] = 'coreos'
-        baymodel_dict['ssh_authorized_key'] = None
-        baymodel = objects.BayModel(self.context, **baymodel_dict)
-        mock_objects_baymodel_get_by_uuid.return_value = baymodel
-        bay = objects.Bay(self.context, **self.bay_dict)
-
-        (template_path,
-         definition) = bay_conductor._extract_template_definition(self.context,
-                                                                  bay)
-
-        expected = {
-            'ssh_key_name': 'keypair_id',
-            'external_network': 'external_network_id',
-            'dns_nameserver': 'dns_nameserver',
-            'server_image': 'image_id',
-            'master_flavor': 'master_flavor_id',
-            'minion_flavor': 'flavor_id',
-            'number_of_minions': '1',
-            'number_of_masters': '1',
-            'fixed_network_cidr': '10.20.30.0/24',
-            'network_driver': 'network_driver',
-            'docker_volume_size': 20,
-            'discovery_url': 'https://discovery.etcd.io/test',
-            'http_proxy': 'http_proxy',
-            'https_proxy': 'https_proxy',
-            'no_proxy': 'no_proxy',
-            'flannel_network_cidr': '10.101.0.0/16',
-            'flannel_network_subnetlen': '26',
-            'flannel_use_vxlan': 'yes',
-            'auth_url': 'http://192.168.10.10:5000/v2',
-            'tenant_name': 'fake_tenant',
-            'username': 'fake_user',
-            'user_token': 'fake_token',
-            'bay_uuid': self.bay_dict['uuid'],
-            'magnum_url': self.mock_osc.magnum_url.return_value,
-            'tls_disabled': False,
-        }
-        self.assertIn('token', definition)
-        del definition['token']
-        self.assertEqual(expected, definition)
 
     @patch('magnum.objects.BayModel.get_by_uuid')
     def test_extract_template_definition_without_apiserver_port(
@@ -401,9 +337,8 @@ class TestBayConductorWithK8s(base.TestCase):
             'server_image': 'image_id',
             'master_flavor': 'master_flavor_id',
             'minion_flavor': 'flavor_id',
-            'number_of_minions': '1',
-            'number_of_masters': '1',
-            'fixed_network_cidr': '10.20.30.0/24',
+            'number_of_minions': 1,
+            'number_of_masters': 1,
             'network_driver': 'network_driver',
             'docker_volume_size': 20,
             'discovery_url': 'https://address/token',
@@ -413,13 +348,18 @@ class TestBayConductorWithK8s(base.TestCase):
             'flannel_network_cidr': '10.101.0.0/16',
             'flannel_network_subnetlen': '26',
             'flannel_use_vxlan': 'yes',
-            'auth_url': 'http://192.168.10.10:5000/v2',
             'tenant_name': 'fake_tenant',
             'username': 'fake_user',
             'user_token': 'fake_token',
             'bay_uuid': self.bay_dict['uuid'],
             'magnum_url': self.mock_osc.magnum_url.return_value,
             'tls_disabled': False,
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
         }
         self.assertEqual(expected, definition)
         reqget.assert_called_once_with('http://etcd/test?size=1')
@@ -436,12 +376,10 @@ class TestBayConductorWithK8s(base.TestCase):
         mock_generate_id.return_value = 'xx-xx-xx-xx'
         expected_stack_name = 'expected_stack_name-xx-xx-xx-xx'
         expected_template_contents = 'template_contents'
-        exptected_files = []
         dummy_bay_name = 'expected_stack_name'
         expected_timeout = 15
 
-        mock_tpl_files = mock.MagicMock()
-        mock_tpl_files.items.return_value = exptected_files
+        mock_tpl_files = {}
         mock_get_template_contents.return_value = [
             mock_tpl_files, expected_template_contents]
         mock_extract_template_definition.return_value = ('template/path',
@@ -459,7 +397,7 @@ class TestBayConductorWithK8s(base.TestCase):
             'stack_name': expected_stack_name,
             'parameters': {},
             'template': expected_template_contents,
-            'files': dict(exptected_files),
+            'files': {},
             'timeout_mins': expected_timeout
         }
         mock_heat_client.stacks.create.assert_called_once_with(**expected_args)
@@ -477,12 +415,10 @@ class TestBayConductorWithK8s(base.TestCase):
         mock_generate_id.return_value = 'xx-xx-xx-xx'
         expected_stack_name = 'expected_stack_name-xx-xx-xx-xx'
         expected_template_contents = 'template_contents'
-        exptected_files = []
         dummy_bay_name = 'expected_stack_name'
         expected_timeout = cfg.CONF.bay_heat.bay_create_timeout
 
-        mock_tpl_files = mock.MagicMock()
-        mock_tpl_files.items.return_value = exptected_files
+        mock_tpl_files = {}
         mock_get_template_contents.return_value = [
             mock_tpl_files, expected_template_contents]
         mock_extract_template_definition.return_value = ('template/path',
@@ -500,7 +436,7 @@ class TestBayConductorWithK8s(base.TestCase):
             'stack_name': expected_stack_name,
             'parameters': {},
             'template': expected_template_contents,
-            'files': dict(exptected_files),
+            'files': {},
             'timeout_mins': expected_timeout
         }
         mock_heat_client.stacks.create.assert_called_once_with(**expected_args)
@@ -518,13 +454,11 @@ class TestBayConductorWithK8s(base.TestCase):
         mock_generate_id.return_value = 'xx-xx-xx-xx'
         expected_stack_name = 'expected_stack_name-xx-xx-xx-xx'
         expected_template_contents = 'template_contents'
-        exptected_files = []
         dummy_bay_name = 'expected_stack_name'
         bay_timeout = 0
         expected_timeout = None
 
-        mock_tpl_files = mock.MagicMock()
-        mock_tpl_files.items.return_value = exptected_files
+        mock_tpl_files = {}
         mock_get_template_contents.return_value = [
             mock_tpl_files, expected_template_contents]
         mock_extract_template_definition.return_value = ('template/path',
@@ -542,7 +476,7 @@ class TestBayConductorWithK8s(base.TestCase):
             'stack_name': expected_stack_name,
             'parameters': {},
             'template': expected_template_contents,
-            'files': dict(exptected_files),
+            'files': {},
             'timeout_mins': expected_timeout
         }
         mock_heat_client.stacks.create.assert_called_once_with(**expected_args)
@@ -556,10 +490,8 @@ class TestBayConductorWithK8s(base.TestCase):
 
         mock_stack_id = 'xx-xx-xx-xx'
         expected_template_contents = 'template_contents'
-        exptected_files = []
 
-        mock_tpl_files = mock.MagicMock()
-        mock_tpl_files.items.return_value = exptected_files
+        mock_tpl_files = {}
         mock_get_template_contents.return_value = [
             mock_tpl_files, expected_template_contents]
         mock_extract_template_definition.return_value = ('template/path',
@@ -575,7 +507,7 @@ class TestBayConductorWithK8s(base.TestCase):
         expected_args = {
             'parameters': {},
             'template': expected_template_contents,
-            'files': dict(exptected_files)
+            'files': {}
         }
         mock_heat_client.stacks.update.assert_called_once_with(mock_stack_id,
                                                                **expected_args)

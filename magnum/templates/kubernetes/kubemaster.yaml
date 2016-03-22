@@ -39,6 +39,13 @@ parameters:
     constraints:
       - allowed_values: ["true", "false"]
 
+  docker_volume_size:
+    type: number
+    description: >
+      size of a cinder volume to allocate to docker for container/image
+      storage
+    default: 25
+
   flannel_network_cidr:
     type: string
     description: network range for flannel overlay network
@@ -177,7 +184,9 @@ resources:
             "$KUBE_API_PUBLIC_ADDRESS": {get_param: api_public_address}
             "$KUBE_API_PRIVATE_ADDRESS": {get_param: api_private_address}
             "$KUBE_API_PORT": {get_param: kubernetes_port}
+            "$KUBE_NODE_IP": {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
             "$KUBE_ALLOW_PRIV": {get_param: kube_allow_priv}
+            "$DOCKER_VOLUME": {get_resource: docker_volume}
             "$NETWORK_DRIVER": {get_param: network_driver}
             "$FLANNEL_NETWORK_CIDR": {get_param: flannel_network_cidr}
             "$FLANNEL_NETWORK_SUBNETLEN": {get_param: flannel_network_subnetlen}
@@ -196,12 +205,19 @@ resources:
             "$HTTP_PROXY": {get_param: http_proxy}
             "$HTTPS_PROXY": {get_param: https_proxy}
             "$NO_PROXY": {get_param: no_proxy}
+            "$WAIT_CURL": {get_attr: [master_wait_handle, curl_cli]}
 
   make_cert:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
       config: {get_file: fragments/make-cert.sh}
+
+  configure_docker_storage:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/configure-docker-storage.sh}
 
   configure_etcd:
     type: OS::Heat::SoftwareConfig
@@ -257,6 +273,30 @@ resources:
       group: ungrouped
       config: {get_file: fragments/network-service.sh}
 
+  enable_kube_podmaster:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-podmaster.sh}
+
+  kube_system_namespace_service:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/kube-system-namespace-service.sh}
+
+  kube_ui_service:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/kube-ui-service.sh}
+
+  enable_kube_proxy:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-proxy-master.sh}
+
   master_wc_notify:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -291,12 +331,17 @@ resources:
         - config: {get_resource: kube_user}
         - config: {get_resource: write_kube_os_config}
         - config: {get_resource: make_cert}
+        - config: {get_resource: configure_docker_storage}
         - config: {get_resource: configure_kubernetes}
         - config: {get_resource: add_proxy}
         - config: {get_resource: enable_services}
         - config: {get_resource: write_network_config}
         - config: {get_resource: network_config_service}
         - config: {get_resource: network_service}
+        - config: {get_resource: kube_system_namespace_service}
+        - config: {get_resource: enable_kube_podmaster}
+        - config: {get_resource: enable_kube_proxy}
+        - config: {get_resource: kube_ui_service}
         - config: {get_resource: kube_examples}
         - config: {get_resource: master_wc_notify}
 
@@ -346,6 +391,24 @@ resources:
       pool_id: {get_param: etcd_pool_id}
       address: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
       protocol_port: 2379
+
+  ######################################################################
+  #
+  # docker storage.  This allocates a cinder volume and attaches it
+  # to the minion.
+  #
+
+  docker_volume:
+    type: OS::Cinder::Volume
+    properties:
+      size: {get_param: docker_volume_size}
+
+  docker_volume_attach:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: {get_resource: kube_master}
+      volume_id: {get_resource: docker_volume}
+      mountpoint: /dev/vdb
 
 outputs:
 

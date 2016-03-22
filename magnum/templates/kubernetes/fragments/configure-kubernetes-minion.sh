@@ -20,11 +20,12 @@ sed -i '
   /^KUBE_MASTER=/ s|=.*|="--master='"$KUBE_MASTER_URI"'"|
 ' /etc/kubernetes/config
 
+KUBELET_ARGS="--config=/etc/kubernetes/manifests --cadvisor-port=4194 ${KUBE_CONFIG}"
 sed -i '
   /^KUBELET_ADDRESS=/ s/=.*/="--address=0.0.0.0"/
   /^KUBELET_HOSTNAME=/ s/=.*/=""/
   /^KUBELET_API_SERVER=/ s|=.*|="--api_servers='"$KUBE_MASTER_URI"'"|
-  /^KUBELET_ARGS=/ s|=.*|='"$KUBE_CONFIG"'|
+  /^KUBELET_ARGS=/ s|=.*|='"${KUBELET_ARGS}"'|
 ' /etc/kubernetes/kubelet
 
 sed -i '
@@ -40,7 +41,5 @@ fi
 cat >> /etc/environment <<EOF
 KUBERNETES_MASTER=$KUBE_MASTER_URI
 EOF
-
-sed -i '/^DOCKER_STORAGE_OPTIONS=/ s/=.*/=--storage-driver devicemapper --storage-opt dm.fs=xfs --storage-opt dm.thinpooldev=\/dev\/mapper\/docker-docker--pool --storage-opt dm.use_deferred_removal=true/' /etc/sysconfig/docker-storage
 
 hostname `hostname | sed 's/.novalocal//'`

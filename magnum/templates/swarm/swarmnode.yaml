@@ -3,24 +3,21 @@ heat_template_version: 2013-05-23
 description: >
   This is a nested stack that defines a single swarm node,
   based on a vanilla Fedora 20 cloud image.  This stack is included by
-  a ResourceGroup resource in the parent template (swarm.yaml).
+  a ResourceGroup resource in the parent template (swarmcluster.yaml).
 
 parameters:
 
   server_image:
     type: string
-    default: fedora-atomic
     description: glance image used to boot the server
 
   server_flavor:
     type: string
-    default: m1.small
     description: flavor to use when booting the server
 
   ssh_key_name:
     type: string
     description: name of ssh key to be provisioned on our server
-    default: lars
 
   docker_volume_size:
     type: number
@@ -43,7 +40,6 @@ parameters:
   network_driver:
     type: string
     description: network driver to use for instantiating container networks
-    default: None
 
   discovery_url:
     type: string
@@ -52,21 +48,22 @@ parameters:
   http_proxy:
     type: string
     description: http proxy address for docker
-    default: ""
 
   https_proxy:
     type: string
     description: https proxy address for docker
-    default: ""
 
   no_proxy:
     type: string
     description: no proxies for docker
-    default: ""
 
-  swarm_master_ip:
+  swarm_api_ip:
     type: string
-    description: swarm master's ip address
+    description: swarm master's api server ip address
+
+  api_ip_address:
+    type: string
+    description: swarm master's api server public ip address
 
   user_token:
     type: string
@@ -83,6 +80,18 @@ parameters:
   tls_disabled:
     type: boolean
     description: whether or not to disable TLS
+
+  swarm_version:
+    type: string
+    description: version of swarm used for swarm cluster
+
+  secgroup_swarm_node_id:
+    type: string
+    description: ID of the security group for swarm node.
+
+  etcd_server_ip:
+    type: string
+    description: ip address of the load balancer pool of etcd server.
 
 resources:
 
@@ -112,21 +121,6 @@ resources:
 
   ######################################################################
   #
-  # security groups.  we need to permit network traffic of various
-  # sorts.
-  #
-
-  secgroup_node:
-    type: "OS::Neutron::SecurityGroup"
-    properties:
-      rules:
-        - protocol: icmp
-        - protocol: tcp
-        - protocol: udp
-
-
-  ######################################################################
-  #
   # software configs.  these are components that are combined into
   # a multipart MIME user-data archive.
   write_heat_params:
@@ -142,19 +136,17 @@ resources:
             "$HTTP_PROXY": {get_param: http_proxy}
             "$HTTPS_PROXY": {get_param: https_proxy}
             "$NO_PROXY": {get_param: no_proxy}
-            "$SWARM_MASTER_IP": {get_param: swarm_master_ip}
+            "$SWARM_API_IP": {get_param: swarm_api_ip}
             "$SWARM_NODE_IP": {get_attr: [swarm_node_eth0, fixed_ips, 0, ip_address]}
             "$BAY_UUID": {get_param: bay_uuid}
             "$USER_TOKEN": {get_param: user_token}
             "$MAGNUM_URL": {get_param: magnum_url}
             "$TLS_DISABLED": {get_param: tls_disabled}
             "$NETWORK_DRIVER": {get_param: network_driver}
-
-  configure_swarm:
-    type: "OS::Heat::SoftwareConfig"
-    properties:
-      group: ungrouped
-      config: {get_file: fragments/configure-swarm.sh}
+            "$ETCD_SERVER_IP": {get_param: etcd_server_ip}
+            "$API_IP_ADDRESS": {get_param: api_ip_address}
+            "$SWARM_VERSION": {get_param: swarm_version}
+            "$AGENT_WAIT_HANDLE": {get_resource: node_agent_wait_handle}
 
   remove_docker_key:
     type: "OS::Heat::SoftwareConfig"
@@ -207,17 +199,7 @@ resources:
     type: "OS::Heat::SoftwareConfig"
     properties:
       group: ungrouped
-      config:
-        str_replace:
-          template: {get_file: fragments/write-swarm-agent-service.yaml}
-          params:
-            "$NODE_IP": {get_attr: [swarm_node_eth0, fixed_ips, 0, ip_address]}
-            "$SWARM_MASTER_IP": {get_param: swarm_master_ip}
-            "$DISCOVERY_URL": {get_param: discovery_url}
-            "$WAIT_HANDLE": {get_resource: node_agent_wait_handle}
-            "$HTTP_PROXY": {get_param: http_proxy}
-            "$HTTPS_PROXY": {get_param: https_proxy}
-            "$NO_PROXY": {get_param: no_proxy}
+      config: {get_file: fragments/write-swarm-agent-service.sh}
 
   enable_services:
     type: "OS::Heat::SoftwareConfig"
@@ -261,7 +243,6 @@ resources:
         - config: {get_resource: write_swarm_agent_service}
         - config: {get_resource: write_docker_service}
         - config: {get_resource: write_docker_socket}
-        - config: {get_resource: configure_swarm}
         - config: {get_resource: add_proxy}
         - config: {get_resource: enable_services}
         - config: {get_resource: cfn_signal}
@@ -287,7 +268,7 @@ resources:
       network_id:
         get_param: fixed_network_id
       security_groups:
-        - get_resource: secgroup_node
+        - {get_param: secgroup_swarm_node_id}
       fixed_ips:
         - subnet_id:
             get_param: fixed_subnet_id

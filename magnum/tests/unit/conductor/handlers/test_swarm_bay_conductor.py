@@ -11,15 +11,16 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
+import mock
+from mock import patch
+from oslo_config import cfg
 from oslo_service import loopingcall
 
 from magnum.conductor.handlers import bay_conductor
 from magnum import objects
 from magnum.objects.fields import BayStatus as bay_status
 from magnum.tests import base
-
-import mock
-from mock import patch
 
 
 class TestBayConductorWithSwarm(base.TestCase):
@@ -28,11 +29,11 @@ class TestBayConductorWithSwarm(base.TestCase):
         self.baymodel_dict = {
             'image_id': 'image_id',
             'flavor_id': 'flavor_id',
+            'master_flavor_id': 'master_flavor_id',
             'keypair_id': 'keypair_id',
             'dns_nameserver': 'dns_nameserver',
             'docker_volume_size': 20,
             'external_network_id': 'external_network_id',
-            'fixed_network': '10.2.0.0/22',
             'cluster_distro': 'fedora-atomic',
             'coe': 'swarm',
             'http_proxy': 'http_proxy',
@@ -53,9 +54,17 @@ class TestBayConductorWithSwarm(base.TestCase):
             'stack_id': 'xx-xx-xx-xx',
             'api_address': '172.17.2.3',
             'node_addresses': ['172.17.2.4'],
+            'master_count': 1,
             'node_count': 1,
             'discovery_url': 'https://discovery.test.io/123456789',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de'
         }
+        cfg.CONF.set_override('trustee_domain_id',
+                              '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+                              group='trust')
         osc_patcher = mock.patch('magnum.common.clients.OpenStackClients')
         self.mock_osc_class = osc_patcher.start()
         self.addCleanup(osc_patcher.stop)
@@ -64,6 +73,7 @@ class TestBayConductorWithSwarm(base.TestCase):
         self.mock_osc_class.return_value = self.mock_osc
         mock_stack = self.mock_osc.heat.return_value.stacks.get.return_value
         mock_stack.parameters = {'user_token': 'fake_token'}
+        self.context.auth_url = 'http://192.168.10.10:5000/v3'
 
     @patch('magnum.objects.BayModel.get_by_uuid')
     def test_extract_template_definition_all_values(
@@ -82,10 +92,11 @@ class TestBayConductorWithSwarm(base.TestCase):
             'external_network': 'external_network_id',
             'dns_nameserver': 'dns_nameserver',
             'server_image': 'image_id',
-            'server_flavor': 'flavor_id',
-            'number_of_nodes': '1',
+            'master_flavor': 'master_flavor_id',
+            'node_flavor': 'flavor_id',
+            'number_of_masters': 1,
+            'number_of_nodes': 1,
             'docker_volume_size': 20,
-            'fixed_network_cidr': '10.2.0.0/22',
             'discovery_url': 'https://discovery.test.io/123456789',
             'http_proxy': 'http_proxy',
             'https_proxy': 'https_proxy',
@@ -97,7 +108,13 @@ class TestBayConductorWithSwarm(base.TestCase):
             'network_driver': 'network_driver',
             'flannel_network_cidr': '10.101.0.0/16',
             'flannel_network_subnetlen': '26',
-            'flannel_use_vxlan': 'yes'
+            'flannel_use_vxlan': 'yes',
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
         }
         self.assertEqual(expected, definition)
 
@@ -108,7 +125,8 @@ class TestBayConductorWithSwarm(base.TestCase):
 
         not_required = ['image_id', 'flavor_id', 'dns_nameserver',
                         'docker_volume_size', 'fixed_network', 'http_proxy',
-                        'https_proxy', 'no_proxy', 'network_driver']
+                        'https_proxy', 'no_proxy', 'network_driver',
+                        'master_flavor_id']
         for key in not_required:
             self.baymodel_dict[key] = None
         self.bay_dict['discovery_url'] = 'https://discovery.etcd.io/test'
@@ -124,7 +142,8 @@ class TestBayConductorWithSwarm(base.TestCase):
         expected = {
             'ssh_key_name': 'keypair_id',
             'external_network': 'external_network_id',
-            'number_of_nodes': '1',
+            'number_of_masters': 1,
+            'number_of_nodes': 1,
             'discovery_url': 'https://discovery.etcd.io/test',
             'user_token': 'fake_token',
             'bay_uuid': 'some_uuid',
@@ -132,7 +151,13 @@ class TestBayConductorWithSwarm(base.TestCase):
             'tls_disabled': False,
             'flannel_network_cidr': u'10.101.0.0/16',
             'flannel_network_subnetlen': u'26',
-            'flannel_use_vxlan': u'yes'
+            'flannel_use_vxlan': u'yes',
+            'trustee_domain_id': '3527620c-b220-4f37-9ebc-6e63a81a9b2f',
+            'trustee_username': 'fake_trustee',
+            'trustee_password': 'fake_trustee_password',
+            'trustee_user_id': '7b489f04-b458-4541-8179-6a48a553e656',
+            'trust_id': 'bd11efc5-d4e2-4dac-bbce-25e348ddf7de',
+            'auth_url': 'http://192.168.10.10:5000/v3'
         }
         self.assertEqual(expected, definition)
 

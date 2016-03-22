@@ -24,15 +24,12 @@ import uuid
 import mock
 import netaddr
 from oslo_concurrency import processutils
-from oslo_config import cfg
 import six
 import six.moves.builtins as __builtin__
 
 from magnum.common import exception
 from magnum.common import utils
 from magnum.tests import base
-
-CONF = cfg.CONF
 
 
 class UtilsTestCase(base.TestCase):
@@ -177,9 +174,8 @@ exit 1
                                   "Are you running with a noexec /tmp?")
                 else:
                     raise
-            fp = open(tmpfilename2, 'r')
-            runs = fp.read()
-            fp.close()
+            with open(tmpfilename2, 'r') as fp:
+                runs = fp.read()
             self.assertNotEqual(runs.strip(), 'failure', 'stdin did not '
                                 'always get passed '
                                 'correctly')
@@ -340,7 +336,7 @@ class GenericUtilsTestCase(base.TestCase):
         data = 'Mary had a little lamb, its fleece as white as snow'
         flo = six.StringIO(data)
         h1 = utils.hash_file(flo)
-        h2 = hashlib.sha1(data).hexdigest()
+        h2 = hashlib.sha1(six.b(data)).hexdigest()
         self.assertEqual(h1, h2)
 
     def test_is_valid_boolstr(self):
@@ -602,3 +598,13 @@ class Urllib2_invalid_scheme(base.TestCase):
 
     def test_raise_exception_invalid_scheme_https(self):
         utils.raise_exception_invalid_scheme(url='https://www.openstack.org')
+
+
+class GeneratePasswordTestCase(base.TestCase):
+    def test_generate_password(self):
+        password = utils.generate_password(length=12)
+        self.assertTrue([c for c in password if c in '0123456789'])
+        self.assertTrue([c for c in password
+                         if c in 'abcdefghijklmnopqrstuvwxyz'])
+        self.assertTrue([c for c in password
+                         if c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'])

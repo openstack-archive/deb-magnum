@@ -56,6 +56,7 @@ class MagnumService(base.MagnumPersistentObject, base.MagnumObject,
 
         :param host: The host on which the binary is running.
         :param binary: The name of the binary.
+        :param context: Security context.
         :returns: a :class:`MagnumService` object.
         """
         db_magnum_service = cls.dbapi.get_magnum_service_by_host_and_binary(
@@ -89,7 +90,12 @@ class MagnumService(base.MagnumPersistentObject, base.MagnumObject,
     def create(self, context=None):
         """Create a MagnumService record in the DB.
 
-        :param context: Security context.
+        :param context: Security context. NOTE: This should only
+                        be used internally by the indirection_api.
+                        Unfortunately, RPC requires context as the first
+                        argument, even though we don't use it.
+                        A context should be set when instantiating the
+                        object, e.g.: MagnumService(context)
         """
         values = self.obj_get_changes()
         db_magnum_service = self.dbapi.create_magnum_service(values)
@@ -99,7 +105,12 @@ class MagnumService(base.MagnumPersistentObject, base.MagnumObject,
     def destroy(self, context=None):
         """Delete the MagnumService from the DB.
 
-        :param context: Security context.
+        :param context: Security context. NOTE: This should only
+                        be used internally by the indirection_api.
+                        Unfortunately, RPC requires context as the first
+                        argument, even though we don't use it.
+                        A context should be set when instantiating the
+                        object, e.g.: MagnumService(context)
         """
         self.dbapi.destroy_magnum_service(self.id)
         self.obj_reset_changes()
@@ -111,7 +122,12 @@ class MagnumService(base.MagnumPersistentObject, base.MagnumObject,
         Updates will be made column by column based on the result
         of self.what_changed().
 
-        :param context: Security context.
+        :param context: Security context. NOTE: This should only
+                        be used internally by the indirection_api.
+                        Unfortunately, RPC requires context as the first
+                        argument, even though we don't use it.
+                        A context should be set when instantiating the
+                        object, e.g.: MagnumService(context)
         """
         updates = self.obj_get_changes()
         self.dbapi.update_magnum_service(self.id, updates)
@@ -121,7 +137,12 @@ class MagnumService(base.MagnumPersistentObject, base.MagnumObject,
     def report_state_up(self, context=None):
         """Touching the magnum_service record to show aliveness.
 
-        :param context: Security context.
+        :param context: Security context. NOTE: This should only
+                        be used internally by the indirection_api.
+                        Unfortunately, RPC requires context as the first
+                        argument, even though we don't use it.
+                        A context should be set when instantiating the
+                        object, e.g.: MagnumService(context)
         """
         self.report_count += 1
-        self.save(context)
+        self.save()

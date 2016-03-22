@@ -31,7 +31,6 @@ from magnum.api.controllers.v1 import baymodel
 from magnum.api.controllers.v1 import certificate
 from magnum.api.controllers.v1 import container
 from magnum.api.controllers.v1 import magnum_services
-from magnum.api.controllers.v1 import node
 from magnum.api.controllers.v1 import pod
 from magnum.api.controllers.v1 import replicationcontroller as rc
 from magnum.api.controllers.v1 import service
@@ -145,7 +144,7 @@ class V1(controllers_base.APIBase):
                                             'baymodels', ''),
                         link.Link.make_link('bookmark',
                                             pecan.request.host_url,
-                                            'bays', '',
+                                            'baymodels', '',
                                             bookmark=True)]
         v1.bays = [link.Link.make_link('self', pecan.request.host_url,
                                        'bays', ''),
@@ -192,7 +191,6 @@ class Controller(rest.RestController):
     bays = bay.BaysController()
     baymodels = baymodel.BayModelsController()
     containers = container.ContainersController()
-    nodes = node.NodesController()
     pods = pod.PodsController()
     rcs = rc.ReplicationControllersController()
     services = service.ServicesController()

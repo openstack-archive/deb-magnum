@@ -23,9 +23,13 @@ from cryptography.hazmat.primitives import serialization
 from cryptography import x509
 from cryptography.x509 import Extension
 from oslo_config import cfg
+from oslo_log import log as logging
 
+from magnum.common import exception
 from magnum.common.x509 import validator
+from magnum.i18n import _LE
 
+LOG = logging.getLogger(__name__)
 
 cfg.CONF.import_group('x509', 'magnum.common.x509.config')
 
@@ -99,7 +103,7 @@ def _generate_certificate(issuer_name, subject_name, extensions, ca_key=None,
                           encryption_password=None, ca_key_password=None):
 
     if not isinstance(subject_name, six.text_type):
-        subject_name = six.u(subject_name)
+        subject_name = six.text_type(subject_name.decode('utf-8'))
 
     private_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -165,12 +169,16 @@ def sign(csr, issuer_name, ca_key, ca_key_password=None,
                                                     backend=default_backend())
 
     if not isinstance(issuer_name, six.text_type):
-        issuer_name = six.u(issuer_name)
+        issuer_name = six.text_type(issuer_name.decode('utf-8'))
 
     if isinstance(csr, six.text_type):
         csr = six.b(str(csr))
     if not isinstance(csr, x509.CertificateSigningRequest):
-        csr = x509.load_pem_x509_csr(csr, backend=default_backend())
+        try:
+            csr = x509.load_pem_x509_csr(csr, backend=default_backend())
+        except ValueError:
+            LOG.exception(_LE("Received invalid csr {0}.").format(csr))
+            raise exception.InvalidCsr(csr=csr)
 
     term_of_validity = cfg.CONF.x509.term_of_validity
     one_day = datetime.timedelta(1, 0, 0)

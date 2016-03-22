@@ -12,29 +12,34 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import glanceclient.exc
-import novaclient.exceptions as nova_exc
 from oslo_utils import timeutils
 import pecan
 from pecan import rest
 import wsme
 from wsme import types as wtypes
 
+from magnum.api import attr_validator
 from magnum.api.controllers import base
 from magnum.api.controllers import link
 from magnum.api.controllers.v1 import collection
 from magnum.api.controllers.v1 import types
-from magnum.api.controllers.v1 import utils as api_utils
 from magnum.api import expose
+from magnum.api import utils as api_utils
 from magnum.api import validation
 from magnum.common import clients
 from magnum.common import exception
 from magnum.common import policy
 from magnum import objects
+from magnum.objects import fields
 
 
 class BayModelPatchType(types.JsonPatchType):
-    pass
+
+    @staticmethod
+    def mandatory_attrs():
+        return ['/image_id', '/keypair_id', '/external_network_id', '/coe',
+                '/tls_disabled', '/public', '/registry_enabled',
+                '/server_type', '/cluster_distro', '/network_driver']
 
 
 class BayModel(base.APIBase):
@@ -44,24 +49,13 @@ class BayModel(base.APIBase):
     between the internal object model and the API representation of a baymodel.
     """
 
-    _coe = None
-
-    def _get_coe(self):
-        return self._coe
-
-    def _set_coe(self, value):
-        if value and self._coe != value:
-            self._coe = value
-        elif value == wtypes.Unset:
-            self._coe = wtypes.Unset
-
     uuid = types.uuid
     """Unique UUID for this baymodel"""
 
     name = wtypes.StringType(min_length=1, max_length=255)
     """The name of the bay model"""
 
-    coe = wsme.wsproperty(wtypes.text, _get_coe, _set_coe, mandatory=True)
+    coe = wtypes.Enum(str, *fields.BayType.ALL, mondatory=True)
     """The Container Orchestration Engine for this bay model"""
 
     image_id = wsme.wsattr(wtypes.StringType(min_length=1, max_length=255),
@@ -96,9 +90,6 @@ class BayModel(base.APIBase):
     docker_volume_size = wtypes.IntegerType(minimum=1)
     """The size in GB of the docker volume"""
 
-    ssh_authorized_key = wtypes.StringType(min_length=1)
-    """The SSH Authorized Key"""
-
     cluster_distro = wtypes.StringType(min_length=1, max_length=255)
     """The Cluster distro for the bay, ex - coreos, fedora-atomic."""
 
@@ -106,14 +97,22 @@ class BayModel(base.APIBase):
     """A list containing a self link and associated baymodel links"""
 
     http_proxy = wtypes.StringType(min_length=1, max_length=255)
-    """http_proxy for the bay """
+    """Address of a proxy that will receive all HTTP requests and relay them.
+       The format is a URL including a port number.
+       """
 
     https_proxy = wtypes.StringType(min_length=1, max_length=255)
-    """https_proxy for the bay """
+    """Address of a proxy that will receive all HTTPS requests and relay them.
+       The format is a URL including a port number.
+       """
 
     no_proxy = wtypes.StringType(min_length=1, max_length=255)
-    """Its comma separated list of ip for which proxies should not
-       used in the bay"""
+    """A comma separated list of ips for which proxies should not
+       used in the bay
+       """
+
+    volume_driver = wtypes.StringType(min_length=1, max_length=255)
+    """The name of the driver used for instantiating container volume driver"""
 
     registry_enabled = wsme.wsattr(types.boolean, default=False)
     """Indicates whether the docker registry is enabled"""
@@ -173,11 +172,11 @@ class BayModel(base.APIBase):
             external_network_id='ffc44e4a-2319-4062-bce0-9ae1c38b05ba',
             fixed_network='private',
             network_driver='libnetwork',
+            volume_driver='cinder',
             apiserver_port=8080,
             docker_volume_size=25,
             cluster_distro='fedora-atomic',
-            ssh_authorized_key='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB',
-            coe='kubernetes',
+            coe=fields.BayType.KUBERNETES,
             http_proxy='http://proxy.com:123',
             https_proxy='https://proxy.com:123',
             no_proxy='192.168.0.1,192.168.0.2,192.168.0.3',
@@ -243,21 +242,6 @@ class BayModelsController(rest.RestController):
                                                      sort_key=sort_key,
                                                      sort_dir=sort_dir)
 
-    def _get_image_data(self, context, image_ident):
-        """Retrieves os_distro and other metadata from the Glance image.
-
-        :param image_ident: image id or name of baymodel.
-        """
-        try:
-            cli = clients.OpenStackClients(context)
-            return api_utils.get_openstack_resource(cli.glance().images,
-                                                    image_ident, 'images')
-        except glanceclient.exc.NotFound:
-            raise exception.ImageNotFound(image_id=image_ident)
-        except glanceclient.exc.HTTPForbidden:
-            raise exception.ImageNotAuthorized(image_id=image_ident)
-
-    @policy.enforce_wsgi("baymodel")
     @expose.expose(BayModelCollection, types.uuid, int, wtypes.text,
                    wtypes.text)
     def get_all(self, marker=None, limit=None, sort_key='id',
@@ -269,10 +253,12 @@ class BayModelsController(rest.RestController):
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         """
+        context = pecan.request.context
+        policy.enforce(context, 'baymodel:get_all',
+                       action='baymodel:get_all')
         return self._get_baymodels_collection(marker, limit, sort_key,
                                               sort_dir)
 
-    @policy.enforce_wsgi("baymodel")
     @expose.expose(BayModelCollection, types.uuid, int, wtypes.text,
                    wtypes.text)
     def detail(self, marker=None, limit=None, sort_key='id',
@@ -284,7 +270,11 @@ class BayModelsController(rest.RestController):
         :param sort_key: column to sort results by. Default: id.
         :param sort_dir: direction to sort. "asc" or "desc". Default: asc.
         """
-        # NOTE(lucasagomes): /detail should only work agaist collections
+        context = pecan.request.context
+        policy.enforce(context, 'baymodel:detail',
+                       action='baymodel:detail')
+
+        # NOTE(lucasagomes): /detail should only work against collections
         parent = pecan.request.path.split('/')[:-1][-1]
         if parent != "baymodels":
             raise exception.HTTPNotFound
@@ -295,43 +285,39 @@ class BayModelsController(rest.RestController):
                                               sort_key, sort_dir, expand,
                                               resource_url)
 
-    @policy.enforce_wsgi("baymodel", "get")
     @expose.expose(BayModel, types.uuid_or_name)
     def get_one(self, baymodel_ident):
         """Retrieve information about the given baymodel.
 
         :param baymodel_ident: UUID or logical name of a baymodel.
         """
-        rpc_baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
-        return BayModel.convert_with_links(rpc_baymodel)
+        context = pecan.request.context
+        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        policy.enforce(context, 'baymodel:get', baymodel,
+                       action='baymodel:get')
 
-    def check_keypair_exists(self, context, keypair):
-        """Checks the existence of the keypair"""
-        cli = clients.OpenStackClients(context)
-        try:
-            cli.nova().keypairs.get(keypair)
-        except nova_exc.NotFound:
-            raise exception.KeyPairNotFound(keypair=keypair)
+        return BayModel.convert_with_links(baymodel)
 
-    @policy.enforce_wsgi("baymodel", "create")
     @expose.expose(BayModel, body=BayModel, status_code=201)
     @validation.enforce_network_driver_types_create()
+    @validation.enforce_volume_driver_types_create()
     def post(self, baymodel):
         """Create a new baymodel.
 
         :param baymodel: a baymodel within the request body.
         """
+        context = pecan.request.context
+        policy.enforce(context, 'baymodel:create',
+                       action='baymodel:create')
         baymodel_dict = baymodel.as_dict()
         context = pecan.request.context
-        self.check_keypair_exists(context, baymodel_dict['keypair_id'])
+        cli = clients.OpenStackClients(context)
+        attr_validator.validate_os_resources(context, baymodel_dict)
+        image_data = attr_validator.validate_image(cli,
+                                                   baymodel_dict['image_id'])
+        baymodel_dict['cluster_distro'] = image_data['os_distro']
         baymodel_dict['project_id'] = context.project_id
         baymodel_dict['user_id'] = context.user_id
-        image_data = self._get_image_data(context, baymodel_dict['image_id'])
-        if image_data.get('os_distro'):
-            baymodel_dict['cluster_distro'] = image_data['os_distro']
-        else:
-            raise exception.OSDistroFieldNotFound(
-                image_id=baymodel_dict['image_id'])
         # check permissions for making baymodel public
         if baymodel_dict['public']:
             if not policy.enforce(context, "baymodel:publish", None,
@@ -345,10 +331,10 @@ class BayModelsController(rest.RestController):
                                                  new_baymodel.uuid)
         return BayModel.convert_with_links(new_baymodel)
 
-    @policy.enforce_wsgi("baymodel", "update")
     @wsme.validate(types.uuid_or_name, [BayModelPatchType])
     @expose.expose(BayModel, types.uuid_or_name, body=[BayModelPatchType])
     @validation.enforce_network_driver_types_update()
+    @validation.enforce_volume_driver_types_update()
     def patch(self, baymodel_ident, patch):
         """Update an existing baymodel.
 
@@ -356,17 +342,21 @@ class BayModelsController(rest.RestController):
         :param patch: a json PATCH document to apply to this baymodel.
         """
         context = pecan.request.context
-        rpc_baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
+        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        policy.enforce(context, 'baymodel:update', baymodel,
+                       action='baymodel:update')
         try:
-            baymodel_dict = rpc_baymodel.as_dict()
-            baymodel = BayModel(**api_utils.apply_jsonpatch(
+            baymodel_dict = baymodel.as_dict()
+            new_baymodel = BayModel(**api_utils.apply_jsonpatch(
                 baymodel_dict,
                 patch))
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
 
+        new_baymodel_dict = new_baymodel.as_dict()
+        attr_validator.validate_os_resources(context, new_baymodel_dict)
         # check permissions when updating baymodel public flag
-        if rpc_baymodel.public != baymodel.public:
+        if baymodel.public != new_baymodel.public:
             if not policy.enforce(context, "baymodel:publish", None,
                                   do_raise=False):
                 raise exception.BaymodelPublishDenied()
@@ -374,24 +364,26 @@ class BayModelsController(rest.RestController):
         # Update only the fields that have changed
         for field in objects.BayModel.fields:
             try:
-                patch_val = getattr(baymodel, field)
+                patch_val = getattr(new_baymodel, field)
             except AttributeError:
                 # Ignore fields that aren't exposed in the API
                 continue
             if patch_val == wtypes.Unset:
                 patch_val = None
-            if rpc_baymodel[field] != patch_val:
-                rpc_baymodel[field] = patch_val
+            if baymodel[field] != patch_val:
+                baymodel[field] = patch_val
 
-        rpc_baymodel.save()
-        return BayModel.convert_with_links(rpc_baymodel)
+        baymodel.save()
+        return BayModel.convert_with_links(baymodel)
 
-    @policy.enforce_wsgi("baymodel")
     @expose.expose(None, types.uuid_or_name, status_code=204)
     def delete(self, baymodel_ident):
         """Delete a baymodel.
 
         :param baymodel_ident: UUID or logical name of a baymodel.
         """
-        rpc_baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
-        rpc_baymodel.destroy()
+        context = pecan.request.context
+        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        policy.enforce(context, 'baymodel:delete', baymodel,
+                       action='baymodel:delete')
+        baymodel.destroy()

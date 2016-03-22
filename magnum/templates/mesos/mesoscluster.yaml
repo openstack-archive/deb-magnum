@@ -64,6 +64,97 @@ parameters:
       considering it hung and shutting it down
     default: 5mins
 
+  number_of_masters:
+    type: number
+    description: how many mesos masters to spawn initially
+    default: 1
+
+  http_proxy:
+    type: string
+    description: http proxy address for docker
+    default: ""
+
+  https_proxy:
+    type: string
+    description: https proxy address for docker
+    default: ""
+
+  no_proxy:
+    type: string
+    description: no proxies for docker
+    default: ""
+
+  trustee_domain_id:
+    type: string
+    description: domain id of the trustee
+    default: ""
+
+  trustee_user_id:
+    type: string
+    description: user id of the trustee
+    default: ""
+
+  trustee_username:
+    type: string
+    description: username of the trustee
+    default: ""
+
+  trustee_password:
+    type: string
+    description: password of the trustee
+    default: ""
+    hidden: true
+
+  trust_id:
+    type: string
+    description: id of the trust which is used by the trustee
+    default: ""
+    hidden: true
+
+  region_name:
+    type: string
+    description: A logically separate section of the cluster
+
+  username:
+    type: string
+    description: user name
+
+  password:
+    type: string
+    description: >
+      user password, not set in current implementation, only used to
+      fill in for Mesos config file
+    default:
+      password
+    hidden: true
+
+  tenant_name:
+    type: string
+    description: >
+      tenant_name is used to isolate access to Compute resources
+
+  volume_driver:
+    type: string
+    description: volume driver to use for container storage
+    default: ""
+
+  domain_name:
+    type: string
+    description: >
+      domain is to define the administrative boundaries for management
+      of Keystone entities
+
+  rexray_preempt:
+    type: string
+    description: >
+      enables any host to take control of a volume irrespective of whether
+      other hosts are using the volume
+    default: "false"
+
+  auth_url:
+    type: string
+    description: url for keystone
+
 resources:
 
   ######################################################################
@@ -108,28 +199,134 @@ resources:
         - protocol: tcp
           port_range_min: 22
           port_range_max: 22
+        - protocol: tcp
+          remote_mode: remote_group_id
 
   secgroup_mesos:
     type: OS::Neutron::SecurityGroup
     properties:
       rules:
         - protocol: tcp
-          port_range_min: 2181
-          port_range_max: 2181
-        - protocol: tcp
-          port_range_min: 2888
-          port_range_max: 2888
-          remote_mode: remote_group_id
-        - protocol: tcp
-          port_range_min: 3888
-          port_range_max: 3888
-          remote_mode: remote_group_id
-        - protocol: tcp
           port_range_min: 5050
           port_range_max: 5050
         - protocol: tcp
           port_range_min: 8080
           port_range_max: 8080
+
+  ######################################################################
+  #
+  # Master SoftwareConfig.
+  #
+
+  write_params_master:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: {get_file: fragments/write-heat-params-master.sh}
+      inputs:
+        - name: MESOS_MASTERS_IPS
+          type: String
+        - name: CLUSTER_NAME
+          type: String
+        - name: QUORUM
+          type: String
+        - name: HTTP_PROXY
+          type: String
+        - name: HTTPS_PROXY
+          type: String
+        - name: NO_PROXY
+          type: String
+
+  configure_master:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: {get_file: fragments/configure-mesos-master.sh}
+
+  add_proxy_master:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: {get_file: fragments/add-proxy.sh}
+
+  start_services_master:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: {get_file: fragments/start-services-master.sh}
+
+  ######################################################################
+  #
+  # Master SoftwareDeployment.
+  #
+
+  write_params_master_deployment:
+    type: OS::Heat::SoftwareDeploymentGroup
+    properties:
+      config: {get_resource: write_params_master}
+      servers: {get_attr: [mesos_masters, attributes, mesos_server_id]}
+      input_values:
+        MESOS_MASTERS_IPS: {list_join: [' ', {get_attr: [mesos_masters, mesos_master_ip]}]}
+        CLUSTER_NAME: {get_param: cluster_name}
+        NUMBER_OF_MASTERS: {get_param: number_of_masters}
+        HTTP_PROXY: {get_param: http_proxy}
+        HTTPS_PROXY: {get_param: https_proxy}
+        NO_PROXY: {get_param: no_proxy}
+
+  configure_master_deployment:
+    type: OS::Heat::SoftwareDeploymentGroup
+    depends_on:
+      - write_params_master_deployment
+    properties:
+      config: {get_resource: configure_master}
+      servers: {get_attr: [mesos_masters, attributes, mesos_server_id]}
+
+  add_proxy_master_deployment:
+    type: OS::Heat::SoftwareDeploymentGroup
+    depends_on:
+      - configure_master_deployment
+    properties:
+      config: {get_resource: add_proxy_master}
+      servers: {get_attr: [mesos_masters, attributes, mesos_server_id]}
+
+  start_services_master_deployment:
+    type: OS::Heat::SoftwareDeploymentGroup
+    depends_on:
+      - add_proxy_master_deployment
+    properties:
+      config: {get_resource: start_services_master}
+      servers: {get_attr: [mesos_masters, attributes, mesos_server_id]}
+
+  ######################################################################
+  #
+  # load balancers.
+  #
+
+  api_monitor:
+    type: OS::Neutron::HealthMonitor
+    properties:
+      type: TCP
+      delay: 5
+      max_retries: 5
+      timeout: 5
+
+  api_pool:
+    type: OS::Neutron::Pool
+    properties:
+      protocol: HTTP
+      monitors: [{get_resource: api_monitor}]
+      subnet: {get_resource: fixed_subnet}
+      lb_method: ROUND_ROBIN
+      vip:
+        protocol_port: 8080
+
+  api_pool_floating:
+    type: OS::Neutron::FloatingIP
+    depends_on:
+      - extrouter_inside
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_attr: [api_pool, vip, port_id]}
 
   ######################################################################
   #
@@ -141,7 +338,7 @@ resources:
     depends_on:
       - extrouter_inside
     properties:
-      count: 1
+      count: {get_param: number_of_masters}
       resource_def:
         type: mesosmaster.yaml
         properties:
@@ -149,12 +346,11 @@ resources:
           server_image: {get_param: server_image}
           master_flavor: {get_param: master_flavor}
           external_network: {get_param: external_network}
-          cluster_name: {get_param: cluster_name}
-          wait_condition_timeout: {get_param: wait_condition_timeout}
           fixed_network: {get_resource: fixed_network}
           fixed_subnet: {get_resource: fixed_subnet}
           secgroup_base_id: {get_resource: secgroup_base}
           secgroup_mesos_id: {get_resource: secgroup_mesos}
+          api_pool_id: {get_resource: api_pool}
 
   ######################################################################
   #
@@ -166,7 +362,6 @@ resources:
     type: OS::Heat::ResourceGroup
     depends_on:
       - extrouter_inside
-      - mesos_masters
     properties:
       count: {get_param: number_of_slaves}
       resource_def:
@@ -177,15 +372,27 @@ resources:
           slave_flavor: {get_param: slave_flavor}
           fixed_network: {get_resource: fixed_network}
           fixed_subnet: {get_resource: fixed_subnet}
-          mesos_master_ip: {'Fn::Select': [0, {get_attr: [mesos_masters, mesos_master_ip]}]}
+          mesos_masters_ips: {list_join: [' ', {get_attr: [mesos_masters, mesos_master_ip]}]}
           external_network: {get_param: external_network}
           wait_condition_timeout: {get_param: wait_condition_timeout}
           executor_registration_timeout: {get_param: executor_registration_timeout}
+          secgroup_base_id: {get_resource: secgroup_base}
+          http_proxy: {get_param: http_proxy}
+          https_proxy: {get_param: https_proxy}
+          no_proxy: {get_param: no_proxy}
+          auth_url: {get_param: auth_url}
+          username: {get_param: username}
+          password: {get_param: password}
+          tenant_name: {get_param: tenant_name}
+          volume_driver: {get_param: volume_driver}
+          region_name: {get_param: region_name}
+          domain_name: {get_param: domain_name}
+          rexray_preempt: {get_param: rexray_preempt}
 
 outputs:
 
   api_address:
-    value: {'Fn::Select': [0, {get_attr: [mesos_masters, mesos_master_external_ip]}]}
+    value: {get_attr: [api_pool_floating, floating_ip_address]}
     description: >
       This is the API endpoint of the Mesos master. Use this to access
       the Mesos API from outside the cluster.

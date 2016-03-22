@@ -17,55 +17,70 @@ import decorator
 from oslo_config import cfg
 import pecan
 
-from magnum.api.controllers.v1 import utils as api_utils
+from magnum.api import utils as api_utils
 from magnum.common import exception
+from magnum.common import utils
+from magnum.i18n import _
 from magnum import objects
 
 
 baymodel_opts = [
     cfg.ListOpt('kubernetes_allowed_network_drivers',
                 default=['all'],
-                help="Allowed network drivers for kubernetes baymodels. "
-                "Use 'all' keyword to allow all drivers supported "
-                "for kubernetes baymodels. Supported network drivers "
-                "include flannel."),
+                help=_("Allowed network drivers for kubernetes baymodels. "
+                       "Use 'all' keyword to allow all drivers supported "
+                       "for kubernetes baymodels. Supported network drivers "
+                       "include flannel.")),
     cfg.StrOpt('kubernetes_default_network_driver',
                default='flannel',
-               help="Default network driver for kubernetes baymodels."),
+               help=_("Default network driver for kubernetes baymodels.")),
     cfg.ListOpt('swarm_allowed_network_drivers',
                 default=['all'],
-                help="Allowed network drivers for docker swarm baymodels. "
-                "Use 'all' keyword to allow all drivers supported "
-                "for swarm baymodels. Supported network drivers "
-                "include docker and flannel."),
+                help=_("Allowed network drivers for docker swarm baymodels. "
+                       "Use 'all' keyword to allow all drivers supported "
+                       "for swarm baymodels. Supported network drivers "
+                       "include docker and flannel.")),
     cfg.StrOpt('swarm_default_network_driver',
                default='docker',
-               help="Default network driver for docker swarm baymodels."),
+               help=_("Default network driver for docker swarm baymodels.")),
     cfg.ListOpt('mesos_allowed_network_drivers',
                 default=['all'],
-                help="Allowed network drivers for mesos baymodels. "
-                "Use 'all' keyword to allow all drivers supported "
-                "for mesos baymodels. Supported network drivers "
-                "include docker."),
+                help=_("Allowed network drivers for mesos baymodels. "
+                       "Use 'all' keyword to allow all drivers supported "
+                       "for mesos baymodels. Supported network drivers "
+                       "include docker.")),
     cfg.StrOpt('mesos_default_network_driver',
                default='docker',
-               help="Default network driver for mesos baymodels."),
+               help=_("Default network driver for mesos baymodels.")),
 ]
 cfg.CONF.register_opts(baymodel_opts, group='baymodel')
 
 
+bay_update_allowed_properties = set(['node_count'])
+
+
 def enforce_bay_types(*bay_types):
+    """Enforce that bay_type is in supported list."""
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
+        # Note(eliqiao): This decorator has some assumptions
+        # args[1] should be an APIBase instance or
+        # args[2] should be a bay_ident
         obj = args[1]
-        bay = objects.Bay.get_by_uuid(pecan.request.context, obj.bay_uuid)
-        baymodel = objects.BayModel.get_by_uuid(pecan.request.context,
-                                                bay.baymodel_id)
-        if baymodel.coe not in bay_types:
-            raise exception.InvalidParameterValue(
+        if hasattr(obj, 'bay_uuid'):
+            bay = objects.Bay.get_by_uuid(pecan.request.context, obj.bay_uuid)
+        else:
+            bay_ident = args[2]
+            if utils.is_uuid_like(bay_ident):
+                bay = objects.Bay.get_by_uuid(pecan.request.context, bay_ident)
+            else:
+                bay = objects.Bay.get_by_name(pecan.request.context, bay_ident)
+
+        if bay.baymodel.coe not in bay_types:
+            raise exception.InvalidParameterValue(_(
                 'Cannot fulfill request with a %(bay_type)s bay, '
-                'expecting a %(supported_bay_types)s bay.' %
-                {'bay_type': baymodel.coe,
+                'expecting a %(supported_bay_types)s bay.') %
+                {'bay_type': bay.baymodel.coe,
                  'supported_bay_types': '/'.join(bay_types)})
 
         return func(*args, **kwargs)
@@ -87,7 +102,14 @@ def enforce_network_driver_types_update():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
         baymodel_ident = args[1]
-        baymodel = api_utils.get_rpc_resource('BayModel', baymodel_ident)
+        patch = args[2]
+        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        try:
+            baymodel_dict = api_utils.apply_jsonpatch(baymodel.as_dict(),
+                                                      patch)
+        except api_utils.JSONPATCH_EXCEPTIONS as e:
+            raise exception.PatchError(patch=patch, reason=e)
+        baymodel = objects.BayModel(pecan.request.context, **baymodel_dict)
         _enforce_network_driver_types(baymodel)
         return func(*args, **kwargs)
 
@@ -97,8 +119,51 @@ def enforce_network_driver_types_update():
 def _enforce_network_driver_types(baymodel):
     validator = Validator.get_coe_validator(baymodel.coe)
     if not baymodel.network_driver:
-        baymodel.network_driver = validator.default_driver
+        baymodel.network_driver = validator.default_network_driver
     validator.validate_network_driver(baymodel.network_driver)
+
+
+def enforce_volume_driver_types_create():
+    @decorator.decorator
+    def wrapper(func, *args, **kwargs):
+        baymodel = args[1]
+        _enforce_volume_driver_types(baymodel.as_dict())
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def enforce_volume_driver_types_update():
+    @decorator.decorator
+    def wrapper(func, *args, **kwargs):
+        baymodel_ident = args[1]
+        patch = args[2]
+        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        try:
+            baymodel_dict = api_utils.apply_jsonpatch(baymodel.as_dict(),
+                                                      patch)
+        except api_utils.JSONPATCH_EXCEPTIONS as e:
+            raise exception.PatchError(patch=patch, reason=e)
+        _enforce_volume_driver_types(baymodel_dict)
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def _enforce_volume_driver_types(baymodel):
+    validator = Validator.get_coe_validator(baymodel['coe'])
+    if not baymodel.get('volume_driver'):
+        return
+    validator.validate_volume_driver(baymodel['volume_driver'])
+
+
+def validate_bay_properties(delta):
+
+    update_disallowed_properties = delta - bay_update_allowed_properties
+    if update_disallowed_properties:
+        err = (_("cannot change bay property(ies) %s.") %
+               ", ".join(update_disallowed_properties))
+        raise exception.InvalidParameterValue(err=err)
 
 
 class Validator(object):
@@ -117,7 +182,7 @@ class Validator(object):
             return cls.validators[coe]
         else:
             raise exception.InvalidParameterValue(
-                'Requested COE type %s is not supported.' % coe)
+                _('Requested COE type %s is not supported.') % coe)
 
     @classmethod
     def validate_network_driver(cls, driver):
@@ -127,43 +192,66 @@ class Validator(object):
     @classmethod
     def _validate_network_driver_supported(cls, driver):
         """Confirm that driver is supported by Magnum for this COE."""
-        if driver not in cls.supported_drivers:
-            raise exception.InvalidParameterValue(
+        if driver not in cls.supported_network_drivers:
+            raise exception.InvalidParameterValue(_(
                 'Network driver type %(driver)s is not supported, '
-                'expecting a %(supported_drivers)s network driver.' % {
+                'expecting a %(supported_drivers)s network driver.') % {
                     'driver': driver,
                     'supported_drivers': '/'.join(
-                        cls.supported_drivers + ['unspecified'])})
+                        cls.supported_network_drivers + ['unspecified'])})
 
     @classmethod
     def _validate_network_driver_allowed(cls, driver):
         """Confirm that driver is allowed via configuration for this COE."""
-        if ('all' not in cls.allowed_drivers and
-           driver not in cls.allowed_drivers):
-            raise exception.InvalidParameterValue(
+        if ('all' not in cls.allowed_network_drivers and
+           driver not in cls.allowed_network_drivers):
+            raise exception.InvalidParameterValue(_(
                 'Network driver type %(driver)s is not allowed, '
-                'expecting a %(allowed_drivers)s network driver. ' % {
+                'expecting a %(allowed_drivers)s network driver. ') % {
                     'driver': driver,
                     'allowed_drivers': '/'.join(
-                        cls.allowed_drivers + ['unspecified'])})
+                        cls.allowed_network_drivers + ['unspecified'])})
+
+    @classmethod
+    def validate_volume_driver(cls, driver):
+        cls._validate_volume_driver_supported(driver)
+
+    @classmethod
+    def _validate_volume_driver_supported(cls, driver):
+        """Confirm that volume driver is supported by Magnum for this COE."""
+        if driver not in cls.supported_volume_driver:
+            raise exception.InvalidParameterValue(_(
+                'Volume driver type %(driver)s is not supported, '
+                'expecting a %(supported_volume_driver)s volume driver.') % {
+                    'driver': driver,
+                    'supported_volume_driver': '/'.join(
+                        cls.supported_volume_driver + ['unspecified'])})
 
 
 class K8sValidator(Validator):
 
-    supported_drivers = ['flannel']
-    allowed_drivers = cfg.CONF.baymodel.kubernetes_allowed_network_drivers
-    default_driver = cfg.CONF.baymodel.kubernetes_default_network_driver
+    supported_network_drivers = ['flannel']
+    allowed_network_drivers = (
+        cfg.CONF.baymodel.kubernetes_allowed_network_drivers)
+    default_network_driver = (
+        cfg.CONF.baymodel.kubernetes_default_network_driver)
+
+    supported_volume_driver = ['cinder']
 
 
 class SwarmValidator(Validator):
 
-    supported_drivers = ['docker', 'flannel']
-    allowed_drivers = cfg.CONF.baymodel.swarm_allowed_network_drivers
-    default_driver = cfg.CONF.baymodel.swarm_default_network_driver
+    supported_network_drivers = ['docker', 'flannel']
+    allowed_network_drivers = cfg.CONF.baymodel.swarm_allowed_network_drivers
+    default_network_driver = cfg.CONF.baymodel.swarm_default_network_driver
+
+    supported_volume_driver = ['rexray']
 
 
 class MesosValidator(Validator):
 
-    supported_drivers = ['docker']
-    allowed_drivers = cfg.CONF.baymodel.mesos_allowed_network_drivers
-    default_driver = cfg.CONF.baymodel.mesos_default_network_driver
+    supported_network_drivers = ['docker']
+    allowed_network_drivers = cfg.CONF.baymodel.mesos_allowed_network_drivers
+    default_network_driver = cfg.CONF.baymodel.mesos_default_network_driver
+
+    supported_volume_driver = ['rexray']
