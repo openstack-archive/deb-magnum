@@ -14,6 +14,7 @@ if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ] ; then
 
 	pkgos_write_new_conf magnum magnum.conf
 	pkgos_write_new_conf magnum policy.json
+	pkgos_write_new_conf magnum api-paste.ini
 
 	pkgos_rabbit_write_conf ${CONF} oslo_messaging_rabbit magnum
 	pkgos_write_admin_creds ${CONF} keystone_authtoken magnum

@@ -20,7 +20,12 @@ override_dh_install:
 		--namespace oslo.service.periodic_task \
 		--namespace oslo.service.service \
 		--namespace keystonemiddleware.auth_token
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf oslo_concurrency lock_path /var/lock/neutron
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf keystone_authtoken auth_protocol http
+
 	cp etc/magnum/policy.json $(CURDIR)/debian/magnum-common/usr/share/magnum-common
+	cp etc/magnum/api-paste.ini $(CURDIR)/debian/magnum-common/usr/share/magnum-common
+
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-common.postinst
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-common.config
 	/usr/share/openstack-pkg-tools/pkgos_insert_include pkgos_func magnum-api.postinst
