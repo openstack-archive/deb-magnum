@@ -7,9 +7,12 @@ export OSLO_PACKAGE_VERSION=$(shell dpkg-parsechangelog | grep Version: | cut -d
 	dh $@ --buildsystem=python_distutils --with python2,systemd,sphinxdoc
 
 override_dh_install:
+	rm -rf $(CURDIR)/debian/tmp
+	python2.7 setup.py install --install-layout=deb --root=$(CURDIR)/debian/tmp
+
 	dh_install --fail-missing
 	mkdir -p $(CURDIR)/debian/magnum-common/usr/share/magnum-common
-	oslo-config-generator --output-file $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf \
+	PYTHONPATH=$(CURDIR)/debian/tmp/usr/lib/python2.7/dist-packages oslo-config-generator --output-file $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf \
 		--namespace magnum \
 		--namespace oslo.concurrency \
 		--namespace oslo.db \
