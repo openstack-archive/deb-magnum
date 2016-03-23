@@ -1,2 +1,3 @@
 missing-install-files.patch
 temporarily-accept-docker-py-1.5.patch
+fix-bashisms.patch
