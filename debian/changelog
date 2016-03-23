@@ -6,6 +6,8 @@ magnum (2.0.0-2) experimental; urgency=medium
   * Set correct lock_path and auth_protocol default options in magnum.conf.
   * Correctly install all files in the package.
   * Add fix-bashisms.patch.
+  * Set default listen on all IPs for magnum-api (ie: 0.0.0.0 instead of the
+    default, which is 127.0.0.1).
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 22 Mar 2016 23:11:15 +0100
 

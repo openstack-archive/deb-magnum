@@ -30,6 +30,7 @@ override_dh_install:
 	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf DEFAULT bindir /usr/bin
 	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf DEFAULT state_path /var/lib/magnum
 
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf api host 0.0.0.0
 
 	cp etc/magnum/policy.json $(CURDIR)/debian/magnum-common/usr/share/magnum-common
 	cp etc/magnum/api-paste.ini $(CURDIR)/debian/magnum-common/usr/share/magnum-common
