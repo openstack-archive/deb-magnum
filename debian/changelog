@@ -4,6 +4,7 @@ magnum (2.0.0-2) experimental; urgency=medium
   * Added missing oslo.middleware.cors namespace when generating config.
   * Also packaging api-paste.ini.
   * Set correct lock_path and auth_protocol default options in magnum.conf.
+  * Correctly install all files in the package.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 22 Mar 2016 23:11:15 +0100
 
