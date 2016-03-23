@@ -26,6 +26,11 @@ override_dh_install:
 	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf oslo_concurrency lock_path /var/lock/magnum
 	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf keystone_authtoken auth_protocol http
 
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf DEFAULT pybasedir /usr/lib/python2.7/dist-packages/magnum
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf DEFAULT bindir /usr/bin
+	pkgos-fix-config-default $(CURDIR)/debian/magnum-common/usr/share/magnum-common/magnum.conf DEFAULT state_path /var/lib/magnum
+
+
 	cp etc/magnum/policy.json $(CURDIR)/debian/magnum-common/usr/share/magnum-common
 	cp etc/magnum/api-paste.ini $(CURDIR)/debian/magnum-common/usr/share/magnum-common
 
