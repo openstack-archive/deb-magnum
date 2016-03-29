@@ -1,3 +1,9 @@
+magnum (2.0.0-3) experimental; urgency=medium
+
+  * Do not use Keystone admin auth token to register API endpoints.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 29 Mar 2016 13:38:20 +0000
+
 magnum (2.0.0-2) experimental; urgency=medium
 
   * Fixed config file generation.
