@@ -1,3 +1,9 @@
+magnum (2.0.0-6) UNRELEASED; urgency=medium
+
+  * Updated Danish translation of the debconf templates (Closes: #830647).
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 11 Jul 2016 14:31:58 +0200
+
 magnum (2.0.0-5) unstable; urgency=medium
 
   [ Ondřej Nový ]

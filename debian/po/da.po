@@ -1,14 +1,14 @@
 # Danish translation magnum.
-# Copyright (C) 2014 magnum & nedenstående oversættere.
+# Copyright (C) 2016 magnum & nedenstående oversættere.
 # This file is distributed under the same license as the magnum package.
-# Joe Hansen (joedalton2@yahoo.dk), 2012, 2013, 2014.
+# Joe Hansen (joedalton2@yahoo.dk), 2012, 2013, 2014, 2016.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: magnum\n"
 "Report-Msgid-Bugs-To: magnum@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-29 13:38+0000\n"
-"PO-Revision-Date: 2014-02-22 12:42+0000\n"
+"PO-Revision-Date: 2016-07-09 12:42+0000\n"
 "Last-Translator: Joe Hansen <joedalton2@yahoo.dk>\n"
 "Language-Team: Danish <debian-l10n-danish@lists.debian.org>\n"
 "Language: da\n"
@@ -25,18 +25,12 @@ msgstr "Opsæt en database for Magnum?"
 #. Type: boolean
 #. Description
 #: ../magnum-common.templates:2001
-#, fuzzy
-#| msgid ""
-#| "No database has been set up for magnum-registry or glance-api to use. "
-#| "Before continuing, you should make sure you have the following "
-#| "information:"
 msgid ""
 "No database has been set up for Magnum to use. Before continuing, you should "
 "make sure you have the following information:"
 msgstr ""
-"Ingen database er blevet opsat som magnum-registry eller glance-api kan "
-"bruge. Før du fortsætter, skal du sikre dig, at du har den følgende "
-"information:"
+"Ingen database er blevet opsat som Magnum kan bruge. Før du fortsætter, "
+"skal du sikre dig, at du har den følgende information:"
 
 #. Type: boolean
 #. Description
@@ -82,17 +76,12 @@ msgstr "Værtsnavn for godkendelsesserver:"
 #. Type: string
 #. Description
 #: ../magnum-common.templates:3001
-#, fuzzy
-#| msgid ""
-#| "Please specify the hostname of the authentication server for Magnum. "
-#| "Typically this is also the hostname of the OpenStack Identity Service "
-#| "(Keystone)."
 msgid ""
 "Please specify the hostname of the authentication server. Typically this is "
 "also the hostname of the OpenStack Identity Service (Keystone)."
 msgstr ""
-"Angiv venligst adressen for din godkendelsesserver for Magnum. Typisk er "
-"dette også adressen for din OpenStack Identity Service (Keystone)."
+"Angiv venligst adressen for godkendelsesserveren. Typisk er dette også "
+"adressen for din OpenStack Identity Service (Keystone)."
 
 #. Type: string
 #. Description
@@ -218,17 +207,14 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../magnum-api.templates:2001
-#, fuzzy
-#| msgid ""
-#| "Note that you will need to have an up and running Keystone server on "
-#| "which to connect using the Keystone authentication token."
 msgid ""
 "Note that you will need to have an up and running Keystone server on which "
 "to connect using a known admin project name, admin username and password. "
 "The admin auth token is not used anymore."
 msgstr ""
 "Bemærk at du skal have en op og kørende Keystoneserver, som du skal forbinde "
-"til med Keystones godkendelsessymbol."
+"til via et kendt administratorprojektnavn, administratorbrugernavn og "
+"adgangskode. Administratorens godkendelsessymbol bruges ikke længere."
 
 #. Type: string
 #. Description
@@ -249,10 +235,8 @@ msgstr ""
 #. Type: string
 #. Description
 #: ../magnum-api.templates:4001
-#, fuzzy
-#| msgid "Keystone authentication token:"
 msgid "Keystone admin name:"
-msgstr "Godkendelsessymbol for Keystone:"
+msgstr "Administratornavn for Keystone:"
 
 #. Type: string
 #. Description
@@ -266,18 +250,21 @@ msgid ""
 "To register the service endpoint, this package needs to know the Admin "
 "login, name, project name, and password to the Keystone server."
 msgstr ""
+"For at registrere tjenesteslutpunkt skal denne pakke kende til "
+"administratorlogind'et, navn, projektnavn og adgangskode for "
+"Keystoneserveren."
 
 #. Type: string
 #. Description
 #: ../magnum-api.templates:5001
 msgid "Keystone admin project name:"
-msgstr ""
+msgstr "Projektnavn for Keystoneadministratoren:"
 
 #. Type: password
 #. Description
 #: ../magnum-api.templates:6001
 msgid "Keystone admin password:"
-msgstr ""
+msgstr "Adgangskode for Keystoneadministratoren:"
 
 #. Type: string
 #. Description
