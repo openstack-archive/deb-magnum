@@ -1,0 +1,10 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 09 May 2016 06:30:29 +0000
+Reviewed-on: https://review.openstack.org/311139
+Project: openstack/deb-magnum
+Branch: refs/heads/master

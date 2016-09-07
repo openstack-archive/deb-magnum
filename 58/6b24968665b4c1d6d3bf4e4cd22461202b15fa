@@ -1,0 +1,11 @@
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Workflow+1: Tom Cammann <tom.cammann@hpe.com>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Adrian Otto <adrian.otto@rackspace.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 26 May 2016 15:11:14 +0000
+Reviewed-on: https://review.openstack.org/320548
+Project: openstack/deb-magnum
+Branch: refs/heads/master

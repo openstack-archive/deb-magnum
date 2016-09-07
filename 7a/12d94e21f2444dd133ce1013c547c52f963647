@@ -1,0 +1,11 @@
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Code-Review+1: yatin <yatin.karel@nectechnologies.in>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Workflow+1: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 09 Aug 2016 12:24:03 +0000
+Reviewed-on: https://review.openstack.org/352619
+Project: openstack/deb-magnum
+Branch: refs/heads/master

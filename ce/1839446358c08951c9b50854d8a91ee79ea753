@@ -1,0 +1,11 @@
+Code-Review+2: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Code-Review+1: Egor Guz <egor.guz@gmail.com>
+Code-Review+1: wangqun <bjwqun@cn.ibm.com>
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Workflow+1: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 24 Mar 2016 20:10:56 +0000
+Reviewed-on: https://review.openstack.org/295068
+Project: openstack/deb-magnum
+Branch: refs/heads/master

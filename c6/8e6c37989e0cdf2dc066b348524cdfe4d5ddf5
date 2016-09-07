@@ -1,0 +1,9 @@
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 25 May 2016 06:24:06 +0000
+Reviewed-on: https://review.openstack.org/320404
+Project: openstack/deb-magnum
+Branch: refs/heads/master

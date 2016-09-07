@@ -1,0 +1,10 @@
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Code-Review+1: Abhishek Chanda <abhishek.becs@gmail.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 27 Jun 2016 20:39:53 +0000
+Reviewed-on: https://review.openstack.org/333112
+Project: openstack/deb-magnum
+Branch: refs/heads/master

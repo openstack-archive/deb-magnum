@@ -1,0 +1,10 @@
+Code-Review+1: Flavio Percoco <fpercoco@redhat.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 08 Jul 2016 05:19:15 +0000
+Reviewed-on: https://review.openstack.org/334328
+Project: openstack/deb-magnum
+Branch: refs/heads/master

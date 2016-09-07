@@ -1,0 +1,10 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+1: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 16 Aug 2016 02:29:31 +0000
+Reviewed-on: https://review.openstack.org/355660
+Project: openstack/deb-magnum
+Branch: refs/heads/master

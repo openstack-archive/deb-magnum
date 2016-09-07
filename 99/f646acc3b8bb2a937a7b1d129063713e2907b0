@@ -1,0 +1,9 @@
+Code-Review+2: Hua Wang <wanghua.humble@gmail.com>
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Workflow+1: Tom Cammann <tom.cammann@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 02 May 2016 17:32:57 +0000
+Reviewed-on: https://review.openstack.org/309862
+Project: openstack/deb-magnum
+Branch: refs/heads/master

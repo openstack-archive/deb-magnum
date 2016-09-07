@@ -1,0 +1,10 @@
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 28 May 2016 01:47:30 +0000
+Reviewed-on: https://review.openstack.org/321906
+Project: openstack/deb-magnum
+Branch: refs/heads/master

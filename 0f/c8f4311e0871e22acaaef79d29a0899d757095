@@ -1,0 +1,10 @@
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+1: Shilla Saebi <shilla.saebi@gmail.com>
+Code-Review+1: wangqun <bjwqun@cn.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 20 May 2016 02:31:43 +0000
+Reviewed-on: https://review.openstack.org/316548
+Project: openstack/deb-magnum
+Branch: refs/heads/master

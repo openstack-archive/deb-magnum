@@ -1,0 +1,9 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Workflow+1: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 17 Jun 2016 03:40:33 +0000
+Reviewed-on: https://review.openstack.org/330310
+Project: openstack/deb-magnum
+Branch: refs/heads/master

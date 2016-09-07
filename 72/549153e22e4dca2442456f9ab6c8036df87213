@@ -1,0 +1,10 @@
+Code-Review+2: Hua Wang <wanghua.humble@gmail.com>
+Code-Review+2: Kai Qiang Wu(Kennan) <wkq5325@gmail.com>
+Code-Review+1: melissaml <ma.lei@99cloud.net>
+Workflow+1: Hua Wang <wanghua.humble@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 07 Apr 2016 10:44:50 +0000
+Reviewed-on: https://review.openstack.org/302502
+Project: openstack/deb-magnum
+Branch: refs/heads/master

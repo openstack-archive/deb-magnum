@@ -1,0 +1,9 @@
+Code-Review+2: Hua Wang <wanghua.humble@gmail.com>
+Code-Review+2: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Workflow+1: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 18 Apr 2016 02:44:13 +0000
+Reviewed-on: https://review.openstack.org/306226
+Project: openstack/deb-magnum
+Branch: refs/heads/master

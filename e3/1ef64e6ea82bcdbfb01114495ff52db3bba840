@@ -1,0 +1,10 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Workflow+1: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 01 Jul 2016 16:30:52 +0000
+Reviewed-on: https://review.openstack.org/322800
+Project: openstack/deb-magnum
+Branch: refs/heads/master

@@ -1,0 +1,9 @@
+Code-Review+1: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Tom Cammann <tom.cammann@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 15 Aug 2016 10:34:38 +0000
+Reviewed-on: https://review.openstack.org/320968
+Project: openstack/deb-magnum
+Branch: refs/heads/master

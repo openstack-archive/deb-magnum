@@ -1,0 +1,9 @@
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Code-Review+2: Egor Guz <egor.guz@gmail.com>
+Workflow+1: Egor Guz <egor.guz@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 28 Mar 2016 11:03:06 +0000
+Reviewed-on: https://review.openstack.org/297908
+Project: openstack/deb-magnum
+Branch: refs/heads/master

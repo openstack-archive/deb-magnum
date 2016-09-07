@@ -1,0 +1,9 @@
+Code-Review+1: Akilan Pughazhendi <akilan.pughazhendi@intel.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 19 Jul 2016 07:35:52 +0000
+Reviewed-on: https://review.openstack.org/342425
+Project: openstack/deb-magnum
+Branch: refs/heads/master

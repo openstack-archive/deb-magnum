@@ -1,0 +1,10 @@
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Workflow+1: Tom Cammann <tom.cammann@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 03 May 2016 18:49:35 +0000
+Reviewed-on: https://review.openstack.org/307633
+Project: openstack/deb-magnum
+Branch: refs/heads/master

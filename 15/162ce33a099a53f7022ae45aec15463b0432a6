@@ -1,0 +1,10 @@
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Workflow+1: Ton Ngo <ton@us.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 18 Jul 2016 08:13:10 +0000
+Reviewed-on: https://review.openstack.org/338680
+Project: openstack/deb-magnum
+Branch: refs/heads/master

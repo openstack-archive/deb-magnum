@@ -1,0 +1,9 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+2: Egor Guz <egor.guz@gmail.com>
+Workflow+1: Egor Guz <egor.guz@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 24 Mar 2016 01:35:17 +0000
+Reviewed-on: https://review.openstack.org/296823
+Project: openstack/deb-magnum
+Branch: refs/heads/master

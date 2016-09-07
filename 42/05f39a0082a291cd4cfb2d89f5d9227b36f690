@@ -1,0 +1,9 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Egor Guz <egor.guz@gmail.com>
+Workflow+1: Egor Guz <egor.guz@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 24 Mar 2016 02:51:31 +0000
+Reviewed-on: https://review.openstack.org/292042
+Project: openstack/deb-magnum
+Branch: refs/heads/master

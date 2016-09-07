@@ -1,0 +1,8 @@
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 15 Jul 2016 17:28:50 +0000
+Reviewed-on: https://review.openstack.org/342616
+Project: openstack/deb-magnum
+Branch: refs/heads/master

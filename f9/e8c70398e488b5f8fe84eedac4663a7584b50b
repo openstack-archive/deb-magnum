@@ -1,0 +1,11 @@
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Code-Review+1: rajiv <rajiv.kumar@nectechnologies.in>
+Code-Review+1: Hieu LE <hieulq@vn.fujitsu.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 23 Aug 2016 18:40:57 +0000
+Reviewed-on: https://review.openstack.org/356654
+Project: openstack/deb-magnum
+Branch: refs/heads/master

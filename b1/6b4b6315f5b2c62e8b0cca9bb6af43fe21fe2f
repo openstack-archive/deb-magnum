@@ -1,0 +1,11 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Workflow+1: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 20 Jul 2016 10:24:39 +0000
+Reviewed-on: https://review.openstack.org/337111
+Project: openstack/deb-magnum
+Branch: refs/heads/master

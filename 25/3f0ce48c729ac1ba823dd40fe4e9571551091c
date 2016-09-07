@@ -1,0 +1,10 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: Murali Allada <murali.allada@rackspace.com>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Adrian Otto <adrian.otto@rackspace.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 30 Jun 2016 01:19:49 +0000
+Reviewed-on: https://review.openstack.org/333353
+Project: openstack/deb-magnum
+Branch: refs/heads/master

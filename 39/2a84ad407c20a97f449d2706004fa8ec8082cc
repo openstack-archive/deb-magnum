@@ -1,0 +1,9 @@
+Code-Review+2: Kai Qiang Wu(Kennan) <wkq5325@gmail.com>
+Code-Review+2: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Workflow+1: Guangya Liu (Jay Lau) <jay.lau.513@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 23 Mar 2016 10:45:59 +0000
+Reviewed-on: https://review.openstack.org/295204
+Project: openstack/deb-magnum
+Branch: refs/heads/master

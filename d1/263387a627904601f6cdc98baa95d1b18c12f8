@@ -1,0 +1,9 @@
+Code-Review+2: Hua Wang <wanghua.humble@gmail.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 06 May 2016 07:42:09 +0000
+Reviewed-on: https://review.openstack.org/306776
+Project: openstack/deb-magnum
+Branch: refs/heads/master

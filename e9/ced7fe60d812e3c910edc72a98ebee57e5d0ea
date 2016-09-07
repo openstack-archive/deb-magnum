@@ -1,0 +1,10 @@
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Code-Review+1: wangqun <bjwqun@cn.ibm.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 13 May 2016 02:24:18 +0000
+Reviewed-on: https://review.openstack.org/314788
+Project: openstack/deb-magnum
+Branch: refs/heads/master

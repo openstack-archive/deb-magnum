@@ -1,0 +1,11 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Kai Qiang Wu(Kennan) <wkq5325@gmail.com>
+Code-Review+1: Murali Allada <murali.allada@rackspace.com>
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 21 Jun 2016 00:57:04 +0000
+Reviewed-on: https://review.openstack.org/331167
+Project: openstack/deb-magnum
+Branch: refs/heads/master

@@ -1,0 +1,10 @@
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+1: Shilla Saebi <shilla.saebi@gmail.com>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Adrian Otto <adrian.otto@rackspace.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 13 May 2016 17:35:09 +0000
+Reviewed-on: https://review.openstack.org/311879
+Project: openstack/deb-magnum
+Branch: refs/heads/master
