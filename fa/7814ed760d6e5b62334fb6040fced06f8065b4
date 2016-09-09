@@ -1,0 +1,9 @@
+Code-Review+2: Tom Cammann <tom.cammann@hpe.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 16 Dec 2015 23:45:47 +0000
+Reviewed-on: https://review.openstack.org/258319
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/liberty
