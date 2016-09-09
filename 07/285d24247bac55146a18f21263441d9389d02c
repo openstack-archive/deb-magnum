@@ -1,0 +1,10 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: Rafael Rivero <rafael@cloudscaling.com>
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 22 Jul 2016 01:42:50 +0000
+Reviewed-on: https://review.openstack.org/334653
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/mitaka

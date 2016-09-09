@@ -1,0 +1,10 @@
+Code-Review+2: Egor Guz <egor.guz@gmail.com>
+Code-Review+1: wangqun <bjwqun@cn.ibm.com>
+Code-Review+2: Kai Qiang Wu(Kennan) <wkq5325@gmail.com>
+Workflow+1: Kai Qiang Wu(Kennan) <wkq5325@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 24 Mar 2016 10:57:37 +0000
+Reviewed-on: https://review.openstack.org/296766
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/mitaka
