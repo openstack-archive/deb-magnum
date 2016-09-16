@@ -15,7 +15,15 @@
 """Magnum object test utilities."""
 
 
+import datetime
+
+import iso8601
+import netaddr
+from oslo_utils import timeutils
+import six
+
 from magnum.common import exception
+from magnum.i18n import _
 from magnum import objects
 from magnum.tests.unit.db import utils as db_utils
 
@@ -45,7 +53,7 @@ def create_test_baymodel(context, **kw):
     baymodel = get_test_baymodel(context, **kw)
     try:
         baymodel.create()
-    except exception.BayModelAlreadyExists:
+    except exception.ClusterTemplateAlreadyExists:
         baymodel = objects.BayModel.get(context, baymodel.uuid)
     return baymodel
 
@@ -79,85 +87,40 @@ def create_test_bay(context, **kw):
     return bay
 
 
-def get_test_pod(context, **kw):
-    """Return a Pod object with appropriate attributes.
+def get_test_cluster_template(context, **kw):
+    """Return a ClusterTemplate object with appropriate attributes.
 
-    NOTE: The object leaves the attributes marked as changed, such
-    that a create() could be used to commit it to the DB.
+    NOTE: Object model is the same for ClusterTemplate and
+    BayModel
     """
-    db_pod = db_utils.get_test_pod(**kw)
-    # Let DB generate ID if it isn't specified explicitly
-    if 'id' not in kw:
-        del db_pod['id']
-    pod = objects.Pod(context)
-    for key in db_pod:
-        setattr(pod, key, db_pod[key])
-    return pod
+    return get_test_baymodel(context, **kw)
 
 
-def create_test_pod(context, **kw):
-    """Create and return a test pod object.
+def create_test_cluster_template(context, **kw):
+    """Create and return a test ClusterTemplate object.
 
-    Create a pod in the DB and return a Pod object with appropriate
-    attributes.
+    NOTE: Object model is the same for ClusterTemplate and
+    BayModel
     """
-    pod = get_test_pod(context, **kw)
-    pod.manifest = '{"foo": "bar"}'
-    return pod
+    return create_test_baymodel(context, **kw)
 
 
-def get_test_service(context, **kw):
-    """Return a Service object with appropriate attributes.
+def get_test_cluster(context, **kw):
+    """Return a Cluster object with appropriate attributes.
 
-    NOTE: The object leaves the attributes marked as changed, such
-    that a create() could be used to commit it to the DB.
+    NOTE: Object model is the same for Cluster and
+    Bay
     """
-    db_service = db_utils.get_test_service(**kw)
-    # Let DB generate ID if it isn't specified explicitly
-    if 'id' not in kw:
-        del db_service['id']
-    service = objects.Service(context)
-    for key in db_service:
-        setattr(service, key, db_service[key])
-    return service
+    return get_test_bay(context, **kw)
 
 
-def create_test_service(context, **kw):
-    """Create and return a test service object.
+def create_test_cluster(context, **kw):
+    """Create and return a test cluster object.
 
-    Create a service in the DB and return a Service object with appropriate
-    attributes.
+    NOTE: Object model is the same for Cluster and
+    Bay
     """
-    service = get_test_service(context, **kw)
-    service.manifest = '{"foo": "bar"}'
-    return service
-
-
-def get_test_rc(context, **kw):
-    """Return a ReplicationController object with appropriate attributes.
-
-    NOTE: The object leaves the attributes marked as changed, such
-    that a create() could be used to commit it to the DB.
-    """
-    db_rc = db_utils.get_test_rc(**kw)
-    # Let DB generate ID if it isn't specified explicitly
-    if 'id' not in kw:
-        del db_rc['id']
-    rc = objects.ReplicationController(context)
-    for key in db_rc:
-        setattr(rc, key, db_rc[key])
-    return rc
-
-
-def create_test_rc(context, **kw):
-    """Create and return a test ReplicationController object.
-
-    Create a replication controller in the DB and return a
-    ReplicationController object with appropriate attributes.
-    """
-    rc = get_test_rc(context, **kw)
-    rc.manifest = '{"foo": "bar"}'
-    return rc
+    return create_test_bay(context, **kw)
 
 
 def get_test_x509keypair(context, **kw):
@@ -200,25 +163,66 @@ def get_test_magnum_service_object(context, **kw):
     return magnum_service
 
 
-def create_test_container(context, **kw):
-    """Create and return a test container object.
+def datetime_or_none(dt):
+    """Validate a datetime or None value."""
+    if dt is None:
+        return None
+    elif isinstance(dt, datetime.datetime):
+        if dt.utcoffset() is None:
+            # NOTE(danms): Legacy objects from sqlalchemy are stored in UTC,
+            # but are returned without a timezone attached.
+            # As a transitional aid, assume a tz-naive object is in UTC.
+            return dt.replace(tzinfo=iso8601.iso8601.Utc())
+        else:
+            return dt
+    raise ValueError(_("A datetime.datetime is required here"))
 
-    Create a container in the DB and return a container object with
-    appropriate attributes.
-    """
-    container = get_test_container(context, **kw)
-    container.create()
-    return container
+
+def datetime_or_str_or_none(val):
+    if isinstance(val, six.string_types):
+        return timeutils.parse_isotime(val)
+    return datetime_or_none(val)
 
 
-def get_test_container(context, **kw):
-    """Return a test container object with appropriate attributes.
+def int_or_none(val):
+    """Attempt to parse an integer value, or None."""
+    if val is None:
+        return val
+    else:
+        return int(val)
 
-    NOTE: The object leaves the attributes marked as changed, such
-    that a create() could be used to commit it to the DB.
-    """
-    db_container = db_utils.get_test_container(**kw)
-    container = objects.Container(context)
-    for key in db_container:
-        setattr(container, key, db_container[key])
-    return container
+
+def str_or_none(val):
+    """Attempt to stringify a value to unicode, or None."""
+    if val is None:
+        return val
+    else:
+        return six.text_type(val)
+
+
+def ip_or_none(version):
+    """Return a version-specific IP address validator."""
+    def validator(val, version=version):
+        if val is None:
+            return val
+        else:
+            return netaddr.IPAddress(val, version=version)
+    return validator
+
+
+def dt_serializer(name):
+    """Return a datetime serializer for a named attribute."""
+    def serializer(self, name=name):
+        if getattr(self, name) is not None:
+            return datetime.datetime.isoformat(getattr(self, name))
+        else:
+            return None
+    return serializer
+
+
+def dt_deserializer(instance, val):
+    """A deserializer method for datetime attributes."""
+    if val is None:
+        return None
+    else:
+        return timeutils.parse_isotime(val)

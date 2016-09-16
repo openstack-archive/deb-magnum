@@ -20,8 +20,6 @@ NOTE: IN PROGRESS AND NOT FULLY IMPLEMENTED.
 
 from oslo_log import log as logging
 import pecan
-from pecan import rest
-from webob import exc
 from wsme import types as wtypes
 
 from magnum.api.controllers import base as controllers_base
@@ -29,13 +27,12 @@ from magnum.api.controllers import link
 from magnum.api.controllers.v1 import bay
 from magnum.api.controllers.v1 import baymodel
 from magnum.api.controllers.v1 import certificate
-from magnum.api.controllers.v1 import container
+from magnum.api.controllers.v1 import cluster
+from magnum.api.controllers.v1 import cluster_template
 from magnum.api.controllers.v1 import magnum_services
-from magnum.api.controllers.v1 import pod
-from magnum.api.controllers.v1 import replicationcontroller as rc
-from magnum.api.controllers.v1 import service
-from magnum.api.controllers.v1 import x509keypair
+from magnum.api.controllers import versions as ver
 from magnum.api import expose
+from magnum.api import http_error
 from magnum.i18n import _
 
 
@@ -43,27 +40,14 @@ LOG = logging.getLogger(__name__)
 
 BASE_VERSION = 1
 
-# NOTE(yuntong): v1.0 is reserved to indicate Kilo's API, but is not presently
-#             supported by the API service. All changes between Kilo and the
-#             point where we added microversioning are considered backwards-
-#             compatible, but are not specifically discoverable at this time.
-#
-#             The v1.1 version indicates this "initial" version as being
-#             different from Kilo (v1.0), and includes the following changes:
-#
+MIN_VER_STR = '%s %s' % (ver.Version.service_string, ver.BASE_VER)
 
-# v1.1: API at the point in time when microversioning support was added
-MIN_VER_STR = '1.1'
+MAX_VER_STR = '%s %s' % (ver.Version.service_string, ver.CURRENT_MAX_VER)
 
-# v1.1: Add API changelog here
-MAX_VER_STR = '1.1'
-
-
-MIN_VER = controllers_base.Version(
-    {controllers_base.Version.string: MIN_VER_STR}, MIN_VER_STR, MAX_VER_STR)
-MAX_VER = controllers_base.Version(
-    {controllers_base.Version.string: MAX_VER_STR},
-    MIN_VER_STR, MAX_VER_STR)
+MIN_VER = ver.Version({ver.Version.string: MIN_VER_STR},
+                      MIN_VER_STR, MAX_VER_STR)
+MAX_VER = ver.Version({ver.Version.string: MAX_VER_STR},
+                      MIN_VER_STR, MAX_VER_STR)
 
 
 class MediaType(controllers_base.APIBase):
@@ -89,25 +73,17 @@ class V1(controllers_base.APIBase):
     links = [link.Link]
     """Links that point to a specific URL for this version and documentation"""
 
-    pods = [link.Link]
-    """Links to the pods resource"""
-
-    rcs = [link.Link]
-    """Links to the rcs resource"""
-
     baymodels = [link.Link]
     """Links to the baymodels resource"""
 
     bays = [link.Link]
     """Links to the bays resource"""
 
-    containers = [link.Link]
-    """Links to the containers resource"""
+    clustertemplates = [link.Link]
+    """Links to the clustertemplates resource"""
 
-    services = [link.Link]
-    """Links to the services resource"""
-
-    x509keypairs = [link.Link]
+    clusters = [link.Link]
+    """Links to the clusters resource"""
 
     certificates = [link.Link]
     """Links to the certificates resource"""
@@ -128,18 +104,6 @@ class V1(controllers_base.APIBase):
                                         bookmark=True, type='text/html')]
         v1.media_types = [MediaType('application/json',
                           'application/vnd.openstack.magnum.v1+json')]
-        v1.pods = [link.Link.make_link('self', pecan.request.host_url,
-                                       'pods', ''),
-                   link.Link.make_link('bookmark',
-                                       pecan.request.host_url,
-                                       'pods', '',
-                                       bookmark=True)]
-        v1.rcs = [link.Link.make_link('self', pecan.request.host_url,
-                                      'rcs', ''),
-                  link.Link.make_link('bookmark',
-                                      pecan.request.host_url,
-                                      'rcs', '',
-                                      bookmark=True)]
         v1.baymodels = [link.Link.make_link('self', pecan.request.host_url,
                                             'baymodels', ''),
                         link.Link.make_link('bookmark',
@@ -152,24 +116,19 @@ class V1(controllers_base.APIBase):
                                        pecan.request.host_url,
                                        'bays', '',
                                        bookmark=True)]
-        v1.containers = [link.Link.make_link('self', pecan.request.host_url,
-                                             'containers', ''),
-                         link.Link.make_link('bookmark',
-                                             pecan.request.host_url,
-                                             'containers', '',
-                                             bookmark=True)]
-        v1.services = [link.Link.make_link('self', pecan.request.host_url,
-                                           'services', ''),
+        v1.clustertemplates = [link.Link.make_link('self',
+                                                   pecan.request.host_url,
+                                                   'clustertemplates', ''),
+                               link.Link.make_link('bookmark',
+                                                   pecan.request.host_url,
+                                                   'clustertemplates', '',
+                                                   bookmark=True)]
+        v1.clusters = [link.Link.make_link('self', pecan.request.host_url,
+                                           'clusters', ''),
                        link.Link.make_link('bookmark',
                                            pecan.request.host_url,
-                                           'services', '',
+                                           'clusters', '',
                                            bookmark=True)]
-        v1.x509keypairs = [link.Link.make_link('self', pecan.request.host_url,
-                                               'x509keypairs', ''),
-                           link.Link.make_link('bookmark',
-                                               pecan.request.host_url,
-                                               'x509keypairs', '',
-                                               bookmark=True)]
         v1.certificates = [link.Link.make_link('self', pecan.request.host_url,
                                                'certificates', ''),
                            link.Link.make_link('bookmark',
@@ -185,16 +144,13 @@ class V1(controllers_base.APIBase):
         return v1
 
 
-class Controller(rest.RestController):
+class Controller(controllers_base.Controller):
     """Version 1 API controller root."""
 
     bays = bay.BaysController()
     baymodels = baymodel.BayModelsController()
-    containers = container.ContainersController()
-    pods = pod.PodsController()
-    rcs = rc.ReplicationControllersController()
-    services = service.ServicesController()
-    x509keypairs = x509keypair.X509KeyPairController()
+    clusters = cluster.ClustersController()
+    clustertemplates = cluster_template.ClusterTemplatesController()
     certificates = certificate.CertificateController()
     mservices = magnum_services.MagnumServiceController()
 
@@ -210,36 +166,41 @@ class Controller(rest.RestController):
             headers = {}
         # ensure that major version in the URL matches the header
         if version.major != BASE_VERSION:
-            raise exc.HTTPNotAcceptable(_(
+            raise http_error.HTTPNotAcceptableAPIVersion(_(
                 "Mutually exclusive versions requested. Version %(ver)s "
                 "requested but not supported by this service."
                 "The supported version range is: "
                 "[%(min)s, %(max)s].") % {'ver': version,
                                           'min': MIN_VER_STR,
                                           'max': MAX_VER_STR},
-                headers=headers)
+                headers=headers,
+                max_version=str(MAX_VER),
+                min_version=str(MIN_VER))
         # ensure the minor version is within the supported range
         if version < MIN_VER or version > MAX_VER:
-            raise exc.HTTPNotAcceptable(_(
+            raise http_error.HTTPNotAcceptableAPIVersion(_(
                 "Version %(ver)s was requested but the minor version is not "
                 "supported by this service. The supported version range is: "
                 "[%(min)s, %(max)s].") % {'ver': version, 'min': MIN_VER_STR,
-                                          'max': MAX_VER_STR}, headers=headers)
+                                          'max': MAX_VER_STR},
+                headers=headers,
+                max_version=str(MAX_VER),
+                min_version=str(MIN_VER))
 
     @pecan.expose()
     def _route(self, args):
-        version = controllers_base.Version(
+        version = ver.Version(
             pecan.request.headers, MIN_VER_STR, MAX_VER_STR)
 
-        # Always set the min and max headers
-        pecan.response.headers[
-            controllers_base.Version.min_string] = MIN_VER_STR
-        pecan.response.headers[
-            controllers_base.Version.max_string] = MAX_VER_STR
+        # Always set the basic version headers
+        pecan.response.headers[ver.Version.min_string] = MIN_VER_STR
+        pecan.response.headers[ver.Version.max_string] = MAX_VER_STR
+        pecan.response.headers[ver.Version.string] = " ".join(
+            [ver.Version.service_string, str(version)])
+        pecan.response.headers["vary"] = ver.Version.string
 
         # assert that requested version is supported
         self._check_version(version, pecan.response.headers)
-        pecan.response.headers[controllers_base.Version.string] = str(version)
         pecan.request.version = version
         if pecan.request.body:
             msg = ("Processing request: url: %(url)s, %(method)s, "
@@ -250,5 +211,6 @@ class Controller(rest.RestController):
             LOG.debug(msg)
 
         return super(Controller, self)._route(args)
+
 
 __all__ = (Controller)

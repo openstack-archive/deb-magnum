@@ -10,8 +10,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import warnings
+
 from tempest import config
 
+from oslo_config import cfg
 
 CONF = config.CONF
 
@@ -24,14 +27,33 @@ class Config(object):
     def set_admin_creds(cls, config):
         cls.admin_user = CONF.auth.admin_username
         cls.admin_passwd = CONF.auth.admin_password
-        cls.admin_tenant = CONF.auth.admin_tenant_name
+        # NOTE(toabctl): also allow the old style tempest definition
+        try:
+            cls.admin_tenant = CONF.auth.admin_project_name
+        except cfg.NoSuchOptError:
+            cls.admin_tenant = CONF.auth.admin_tenant_name
+            warnings.warn("the config option 'admin_tenant_name' from the "
+                          "'auth' section is deprecated. Please switch "
+                          "to 'admin_project_name'.")
 
     @classmethod
     def set_user_creds(cls, config):
         # normal user creds
-        cls.user = CONF.identity.username
-        cls.passwd = CONF.identity.password
-        cls.tenant = CONF.identity.tenant_name
+        # Fixme(eliqiao): this is quick workaround to passing tempest
+        # legacy credentials provider is removed by tempest
+        # I8c24cd17f643083dde71ab2bd2a38417c54aeccb.
+        # TODO(eliqiao): find a way to using an accounts.yaml file
+        # check Ia5132c5cb32355d6f26b8acdd92a0e55a2c19f41
+        cls.user = CONF.auth.admin_username
+        cls.passwd = CONF.auth.admin_password
+        # NOTE(toabctl): also allow the old style tempest definition
+        try:
+            cls.tenant = CONF.auth.admin_project_name
+        except cfg.NoSuchOptError:
+            cls.tenant = CONF.auth.admin_tenant_name
+            warnings.warn("the config option 'admin_tenant_name' from the "
+                          "'auth' section is deprecated. Please switch "
+                          "to 'admin_project_name'.")
 
     @classmethod
     def set_auth_version(cls, config):
@@ -104,10 +126,16 @@ class Config(object):
         cls.csr_location = CONF.magnum.csr_location
 
     @classmethod
+    def set_dns_nameserver(cls, config):
+        if 'dns_nameserver' not in CONF.magnum:
+            raise Exception('config missing dns_nameserver')
+        cls.dns_nameserver = CONF.magnum.dns_nameserver
+
+    @classmethod
     def set_copy_logs(cls, config):
         if 'copy_logs' not in CONF.magnum:
             cls.copy_logs = True
-        cls.copy_logs = CONF.magnum.copy_logs
+        cls.copy_logs = str(CONF.magnum.copy_logs).lower() == 'true'
 
     @classmethod
     def setUp(cls):
@@ -125,4 +153,5 @@ class Config(object):
         cls.set_magnum_url(config)
         cls.set_master_flavor_id(config)
         cls.set_csr_location(config)
+        cls.set_dns_nameserver(config)
         cls.set_copy_logs(config)

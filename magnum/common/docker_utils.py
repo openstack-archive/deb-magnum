@@ -19,10 +19,8 @@ from docker import tls
 from docker.utils import utils
 from oslo_config import cfg
 
-from magnum.common import utils as magnum_utils
 from magnum.conductor.handlers.common import cert_manager
 from magnum.conductor import utils as conductor_utils
-from magnum import objects
 
 
 docker_opts = [
@@ -74,15 +72,6 @@ def is_docker_api_version_atleast(docker, version):
     if utils.compare_version(docker.version()['ApiVersion'], version) <= 0:
         return True
     return False
-
-
-@contextlib.contextmanager
-def docker_for_container(context, container):
-    if magnum_utils.is_uuid_like(container):
-        container = objects.Container.get_by_uuid(context, container)
-    bay = conductor_utils.retrieve_bay(context, container.bay_uuid)
-    with docker_for_bay(context, bay) as docker:
-        yield docker
 
 
 @contextlib.contextmanager
@@ -148,20 +137,3 @@ class DockerHTTPClient(client.Client):
             else:
                 res.append(info['Config'].get('Hostname'))
         return res
-
-    def pause(self, container):
-        if isinstance(container, dict):
-            container = container.get('Id')
-        url = self._url('/containers/{0}/pause'.format(container))
-        res = self._post(url)
-        self._raise_for_status(res)
-
-    def unpause(self, container):
-        if isinstance(container, dict):
-            container = container.get('Id')
-        url = self._url('/containers/{0}/unpause'.format(container))
-        res = self._post(url)
-        self._raise_for_status(res)
-
-    def get_container_logs(self, docker_id):
-        return self.logs(docker_id)

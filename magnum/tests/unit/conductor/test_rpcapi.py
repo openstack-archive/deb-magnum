@@ -28,12 +28,6 @@ class RPCAPITestCase(base.DbTestCase):
     def setUp(self):
         super(RPCAPITestCase, self).setUp()
         self.fake_bay = dbutils.get_test_bay(driver='fake-driver')
-        self.fake_container = dbutils.get_test_container(driver='fake-driver')
-        self.fake_pod = dbutils.get_test_pod(driver='fake-driver')
-        self.fake_rc = dbutils.get_test_rc(driver='fake-driver')
-        self.fake_service = dbutils.get_test_service(driver='fake-driver')
-        self.fake_x509keypair = dbutils.get_test_x509keypair(
-            driver='fake-driver')
         self.fake_certificate = objects.Certificate.from_db_bay(self.fake_bay)
         self.fake_certificate.csr = 'fake-csr'
 
@@ -102,169 +96,11 @@ class RPCAPITestCase(base.DbTestCase):
                           version='1.1',
                           bay=self.fake_bay['name'])
 
-    def test_service_create(self):
-        self._test_rpcapi('service_create',
-                          'call',
-                          version='1.0',
-                          service=self.fake_service)
-
-    def test_service_update(self):
-        self._test_rpcapi('service_update',
-                          'call',
-                          version='1.0',
-                          service_ident=self.fake_service['uuid'],
-                          bay_ident=self.fake_service['bay_uuid'],
-                          manifest={})
-
-    def test_service_delete(self):
-        self._test_rpcapi('service_delete',
-                          'call',
-                          version='1.0',
-                          service_ident=self.fake_service['uuid'],
-                          bay_ident=self.fake_service['bay_uuid'])
-        self._test_rpcapi('service_delete',
-                          'call',
-                          version='1.1',
-                          service_ident=self.fake_service['uuid'],
-                          bay_ident=self.fake_service['bay_uuid'])
-
-    def test_pod_create(self):
-        self._test_rpcapi('pod_create',
-                          'call',
-                          version='1.0',
-                          pod=self.fake_pod)
-
-    def test_pod_update(self):
-        self._test_rpcapi('pod_update',
-                          'call',
-                          version='1.1',
-                          pod_ident=self.fake_pod['uuid'],
-                          bay_ident=self.fake_pod['bay_uuid'],
-                          manifest={})
-
-    def test_pod_delete(self):
-        self._test_rpcapi('pod_delete',
-                          'call',
-                          version='1.0',
-                          pod_ident=self.fake_pod['uuid'],
-                          bay_ident=self.fake_pod['bay_uuid'])
-
-        self._test_rpcapi('pod_delete',
-                          'call',
-                          version='1.1',
-                          pod_ident=self.fake_pod['uuid'],
-                          bay_ident=self.fake_pod['bay_uuid'])
-
-    def test_rc_create(self):
-        self._test_rpcapi('rc_create',
-                          'call',
-                          version='1.0',
-                          rc=self.fake_rc)
-
-    def test_rc_update(self):
-        self._test_rpcapi('rc_update',
-                          'call',
-                          version='1.0',
-                          rc_ident=self.fake_rc['uuid'],
-                          bay_ident=self.fake_rc['bay_uuid'],
-                          manifest={})
-
-    def test_rc_delete(self):
-        self._test_rpcapi('rc_delete',
-                          'call',
-                          version='1.0',
-                          rc_ident=self.fake_rc['uuid'],
-                          bay_ident=self.fake_rc['bay_uuid'])
-
-        self._test_rpcapi('rc_delete',
-                          'call',
-                          version='1.1',
-                          rc_ident=self.fake_rc['uuid'],
-                          bay_ident=self.fake_rc['bay_uuid'])
-
-    def test_container_create(self):
-        self._test_rpcapi('container_create',
-                          'call',
-                          version='1.0',
-                          container=self.fake_container)
-
-    def test_container_delete(self):
-        self._test_rpcapi('container_delete',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_show(self):
-        self._test_rpcapi('container_show',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_reboot(self):
-        self._test_rpcapi('container_reboot',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_stop(self):
-        self._test_rpcapi('container_stop',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_start(self):
-        self._test_rpcapi('container_start',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_pause(self):
-        self._test_rpcapi('container_pause',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_unpause(self):
-        self._test_rpcapi('container_unpause',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_logs(self):
-        self._test_rpcapi('container_logs',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'])
-
-    def test_container_exec(self):
-        self._test_rpcapi('container_exec',
-                          'call',
-                          version='1.0',
-                          container_uuid=self.fake_container['uuid'],
-                          command=self.fake_container['command'])
-
     def test_ping_conductor(self):
         self._test_rpcapi('ping_conductor',
                           'call',
                           rpcapi_cls=conductor_rpcapi.ListenerAPI,
                           version='1.0')
-
-    def test_x509keypair_create(self):
-        self._test_rpcapi('x509keypair_create',
-                          'call',
-                          version='1.0',
-                          x509keypair=self.fake_x509keypair)
-
-    def test_x509keypair_delete(self):
-        self._test_rpcapi('x509keypair_delete',
-                          'call',
-                          version='1.0',
-                          uuid=self.fake_x509keypair['uuid'])
-
-        self._test_rpcapi('x509keypair_delete',
-                          'call',
-                          version='1.1',
-                          uuid=self.fake_x509keypair['name'])
 
     def test_sign_certificate(self):
         self._test_rpcapi('sign_certificate',

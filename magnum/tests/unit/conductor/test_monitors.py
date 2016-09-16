@@ -154,7 +154,7 @@ class MonitorsTestCase(base.TestCase):
         mock_nodes = mock.MagicMock()
         mock_node = mock.MagicMock()
         mock_node.status = mock.MagicMock()
-        mock_node.status.capacity = "{'memory': '2000Ki'}"
+        mock_node.status.capacity = "{'memory': '2000Ki', 'cpu': '1'}"
         mock_nodes.items = [mock_node]
         mock_k8s_api.return_value.list_namespaced_node.return_value = (
             mock_nodes)
@@ -163,16 +163,16 @@ class MonitorsTestCase(base.TestCase):
         mock_pod.spec = mock.MagicMock()
         mock_container = mock.MagicMock()
         mock_container.resources = mock.MagicMock()
-        mock_container.resources.limits = "{'memory':'100Mi'}"
+        mock_container.resources.limits = "{'memory': '100Mi', 'cpu': '500m'}"
         mock_pod.spec.containers = [mock_container]
         mock_pods.items = [mock_pod]
         mock_k8s_api.return_value.list_namespaced_pod.return_value = mock_pods
 
         self.k8s_monitor.pull_data()
         self.assertEqual(self.k8s_monitor.data['nodes'],
-                         [{'Memory': 2048000.0}])
+                         [{'Memory': 2048000.0, 'Cpu': 1}])
         self.assertEqual(self.k8s_monitor.data['pods'],
-                         [{'Memory': 104857600.0}])
+                         [{'Memory': 104857600.0, 'Cpu': 0.5}])
 
     def test_k8s_monitor_get_metric_names(self):
         k8s_metric_spec = 'magnum.conductor.k8s_monitor.K8sMonitor.'\
@@ -217,9 +217,34 @@ class MonitorsTestCase(base.TestCase):
         mem_util = self.k8s_monitor.compute_memory_util()
         self.assertEqual(0, mem_util)
 
+    def test_k8s_monitor_compute_cpu_util(self):
+        test_data = {
+            'nodes': [
+                {
+                    'Cpu': 1,
+                },
+            ],
+            'pods': [
+                {
+                    'Cpu': 0.5,
+                },
+            ],
+        }
+        self.k8s_monitor.data = test_data
+        cpu_util = self.k8s_monitor.compute_cpu_util()
+        self.assertEqual(50, cpu_util)
+
+        test_data = {
+            'nodes': [],
+            'pods': [],
+        }
+        self.k8s_monitor.data = test_data
+        cpu_util = self.k8s_monitor.compute_cpu_util()
+        self.assertEqual(0, cpu_util)
+
     def _test_mesos_monitor_pull_data(
             self, mock_url_get, state_json, expected_mem_total,
-            expected_mem_used):
+            expected_mem_used, expected_cpu_total, expected_cpu_used):
         state_json = jsonutils.dumps(state_json)
         mock_url_get.return_value = state_json
         self.mesos_monitor.pull_data()
@@ -227,6 +252,10 @@ class MonitorsTestCase(base.TestCase):
                          expected_mem_total)
         self.assertEqual(self.mesos_monitor.data['mem_used'],
                          expected_mem_used)
+        self.assertEqual(self.mesos_monitor.data['cpu_total'],
+                         expected_cpu_total)
+        self.assertEqual(self.mesos_monitor.data['cpu_used'],
+                         expected_cpu_used)
 
     @mock.patch('magnum.common.urlfetch.get')
     def test_mesos_monitor_pull_data_success(self, mock_url_get):
@@ -235,14 +264,17 @@ class MonitorsTestCase(base.TestCase):
             'pid': 'master@10.0.0.6:5050',
             'slaves': [{
                 'resources': {
-                    'mem': 100
+                    'mem': 100,
+                    'cpus': 1,
                 },
                 'used_resources': {
-                    'mem': 50
+                    'mem': 50,
+                    'cpus': 0.2,
                 }
             }]
         }
-        self._test_mesos_monitor_pull_data(mock_url_get, state_json, 100, 50)
+        self._test_mesos_monitor_pull_data(mock_url_get, state_json,
+                                           100, 50, 1, 0.2)
 
     @mock.patch('magnum.common.urlfetch.get')
     def test_mesos_monitor_pull_data_success_not_leader(self, mock_url_get):
@@ -251,12 +283,13 @@ class MonitorsTestCase(base.TestCase):
             'pid': 'master@1.1.1.1:5050',
             'slaves': []
         }
-        self._test_mesos_monitor_pull_data(mock_url_get, state_json, 0, 0)
+        self._test_mesos_monitor_pull_data(mock_url_get, state_json,
+                                           0, 0, 0, 0)
 
     @mock.patch('magnum.common.urlfetch.get')
     def test_mesos_monitor_pull_data_success_no_master(self, mock_url_get):
         self.bay.master_addresses = []
-        self._test_mesos_monitor_pull_data(mock_url_get, {}, 0, 0)
+        self._test_mesos_monitor_pull_data(mock_url_get, {}, 0, 0, 0, 0)
 
     def test_mesos_monitor_get_metric_names(self):
         mesos_metric_spec = 'magnum.conductor.mesos_monitor.MesosMonitor.'\
@@ -292,3 +325,29 @@ class MonitorsTestCase(base.TestCase):
         self.mesos_monitor.data = test_data
         mem_util = self.mesos_monitor.compute_memory_util()
         self.assertEqual(0, mem_util)
+
+        test_data = {
+            'mem_total': 100,
+            'mem_used': 0,
+            'pods': 0,
+        }
+        self.mesos_monitor.data = test_data
+        mem_util = self.mesos_monitor.compute_memory_util()
+        self.assertEqual(0, mem_util)
+
+    def test_mesos_monitor_compute_cpu_util(self):
+        test_data = {
+            'cpu_total': 1,
+            'cpu_used': 0.2,
+        }
+        self.mesos_monitor.data = test_data
+        cpu_util = self.mesos_monitor.compute_cpu_util()
+        self.assertEqual(20, cpu_util)
+
+        test_data = {
+            'cpu_total': 100,
+            'cpu_used': 0,
+        }
+        self.mesos_monitor.data = test_data
+        cpu_util = self.mesos_monitor.compute_cpu_util()
+        self.assertEqual(0, cpu_util)
