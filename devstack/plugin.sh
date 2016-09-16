@@ -8,16 +8,13 @@ echo_summary "magnum's plugin.sh was called..."
 source $DEST/magnum/devstack/lib/magnum
 (set -o posix; set)
 
-if is_service_enabled m-api m-cond; then
+if is_service_enabled magnum-api magnum-cond; then
     if [[ "$1" == "stack" && "$2" == "install" ]]; then
         echo_summary "Installing magnum"
         install_magnum
 
-        # add image to glance
-        if [[ "$ENABLED_SERVICES" =~ 'm-api' ]]; then
-            MAGNUM_GUEST_IMAGE_URL=${MAGNUM_GUEST_IMAGE_URL:-"https://fedorapeople.org/groups/magnum/fedora-21-atomic-5.qcow2"}
-            IMAGE_URLS+=",${MAGNUM_GUEST_IMAGE_URL}"
-        fi
+        MAGNUM_GUEST_IMAGE_URL=${MAGNUM_GUEST_IMAGE_URL:-"https://fedorapeople.org/groups/magnum/fedora-atomic-latest.qcow2"}
+        IMAGE_URLS+=",${MAGNUM_GUEST_IMAGE_URL}"
 
         LIBS_FROM_GIT="${LIBS_FROM_GIT},python-magnumclient"
 

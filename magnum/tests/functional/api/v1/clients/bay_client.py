@@ -11,8 +11,11 @@
 # under the License.
 
 from oslo_log import log as logging
-from tempest_lib import exceptions
+from tempest.lib import exceptions
 
+from magnum.i18n import _LE
+from magnum.i18n import _LI
+from magnum.i18n import _LW
 from magnum.tests.functional.api.v1.models import bay_model
 from magnum.tests.functional.common import client
 from magnum.tests.functional.common import utils
@@ -112,59 +115,59 @@ class BayClient(client.MagnumClient):
 
     def wait_for_bay_to_delete(self, bay_id):
         utils.wait_for_condition(
-            lambda: self.does_bay_not_exist(bay_id), 10, 3600)
+            lambda: self.does_bay_not_exist(bay_id), 10, 600)
 
     def wait_for_created_bay(self, bay_id, delete_on_error=True):
         try:
             utils.wait_for_condition(
-                lambda: self.does_bay_exist(bay_id), 10, 3600)
+                lambda: self.does_bay_exist(bay_id), 10, 1800)
         except Exception:
             # In error state.  Clean up the bay id if desired
-            self.LOG.error('Bay %s entered an exception state.' % bay_id)
+            self.LOG.error(_LE('Bay %s entered an exception state.') % bay_id)
             if delete_on_error:
-                self.LOG.error('We will attempt to delete bays now.')
+                self.LOG.error(_LE('We will attempt to delete bays now.'))
                 self.delete_bay(bay_id)
                 self.wait_for_bay_to_delete(bay_id)
             raise
 
     def wait_for_final_state(self, bay_id):
         utils.wait_for_condition(
-            lambda: self.is_bay_in_final_state(bay_id), 10, 3600)
+            lambda: self.is_bay_in_final_state(bay_id), 10, 1800)
 
     def is_bay_in_final_state(self, bay_id):
         try:
             resp, model = self.get_bay(bay_id)
             if model.status in ['CREATED', 'CREATE_COMPLETE',
                                 'ERROR', 'CREATE_FAILED']:
-                self.LOG.info('Bay %s succeeded.' % bay_id)
+                self.LOG.info(_LI('Bay %s succeeded.') % bay_id)
                 return True
             else:
                 return False
         except exceptions.NotFound:
-            self.LOG.warning('Bay %s is not found.' % bay_id)
+            self.LOG.warning(_LW('Bay %s is not found.') % bay_id)
             return False
 
     def does_bay_exist(self, bay_id):
         try:
             resp, model = self.get_bay(bay_id)
             if model.status in ['CREATED', 'CREATE_COMPLETE']:
-                self.LOG.info('Bay %s is created.' % bay_id)
+                self.LOG.info(_LI('Bay %s is created.') % bay_id)
                 return True
             elif model.status in ['ERROR', 'CREATE_FAILED']:
-                self.LOG.error('Bay %s is in fail state.' % bay_id)
+                self.LOG.error(_LE('Bay %s is in fail state.') % bay_id)
                 raise exceptions.ServerFault(
                     "Got into an error condition: %s for %s" %
                     (model.status, bay_id))
             else:
                 return False
         except exceptions.NotFound:
-            self.LOG.warning('Bay %s is not found.' % bay_id)
+            self.LOG.warning(_LW('Bay %s is not found.') % bay_id)
             return False
 
     def does_bay_not_exist(self, bay_id):
         try:
             self.get_bay(bay_id)
         except exceptions.NotFound:
-            self.LOG.warning('Bay %s is not found.' % bay_id)
+            self.LOG.warning(_LW('Bay %s is not found.') % bay_id)
             return True
         return False

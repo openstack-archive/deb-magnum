@@ -18,10 +18,8 @@ import pytz
 
 from magnum.api.controllers.v1 import bay as bay_controller
 from magnum.api.controllers.v1 import baymodel as baymodel_controller
-from magnum.api.controllers.v1 import pod as pod_controller
-from magnum.api.controllers.v1 import replicationcontroller as rc_controller
-from magnum.api.controllers.v1 import service as service_controller
-from magnum.api.controllers.v1 import x509keypair as x509keypair_controller
+from magnum.api.controllers.v1 import cluster as cluster_controller
+from magnum.api.controllers.v1 import cluster_template as cluster_tmp_ctrl
 from magnum.tests.unit.db import utils
 
 
@@ -37,6 +35,12 @@ def baymodel_post_data(**kw):
     return remove_internal(baymodel, internal)
 
 
+def cluster_template_post_data(**kw):
+    cluster_template = utils.get_test_baymodel(**kw)
+    internal = cluster_tmp_ctrl.ClusterTemplatePatchType.internal_attrs()
+    return remove_internal(cluster_template, internal)
+
+
 def bay_post_data(**kw):
     bay = utils.get_test_bay(**kw)
     bay['bay_create_timeout'] = kw.get('bay_create_timeout', 15)
@@ -44,104 +48,24 @@ def bay_post_data(**kw):
     return remove_internal(bay, internal)
 
 
+def cluster_post_data(**kw):
+    cluster = utils.get_test_bay(**kw)
+    cluster['create_timeout'] = kw.get('create_timeout', 15)
+    cluster['cluster_template_id'] = kw.get('cluster_template_id',
+                                            cluster['baymodel_id'])
+    del cluster['bay_create_timeout']
+    del cluster['baymodel_id']
+    internal = cluster_controller.ClusterPatchType.internal_attrs()
+    return remove_internal(cluster, internal)
+
+
 def cert_post_data(**kw):
     return {
-        'bay_uuid': kw.get('bay_uuid', '5d12f6fd-a196-4bf0-ae4c-1f639a523a52'),
+        'cluster_uuid': kw.get('cluster_uuid',
+                               '5d12f6fd-a196-4bf0-ae4c-1f639a523a52'),
         'csr': kw.get('csr', 'fake-csr'),
         'pem': kw.get('pem', 'fake-pem')
     }
-
-
-def pod_post_data(**kw):
-    pod = utils.get_test_pod(**kw)
-    if 'manifest' not in pod:
-        pod['manifest'] = '''{
-            "metadata": {
-                "name": "name_of_pod"
-            },
-            "spec": {
-                "containers": [
-                    {
-                        "name": "test",
-                        "image": "test"
-                    }
-                ]
-            }
-        }'''
-    internal = pod_controller.PodPatchType.internal_attrs()
-    return remove_internal(pod, internal)
-
-
-def service_post_data(**kw):
-    service = utils.get_test_service(**kw)
-    if 'manifest' not in service:
-        service['manifest'] = '''{
-            "metadata": {
-                "name": "test",
-                "labels": {
-                    "key": "value"
-                }
-            },
-            "spec": {
-                "ports": [
-                    {
-                    "port": 88,
-                    "targetPort": 6379,
-                    "protocol": "TCP"
-                    }
-                ],
-                "selector": {
-                    "bar": "foo"
-                }
-            }
-            }'''
-    internal = service_controller.ServicePatchType.internal_attrs()
-    return remove_internal(service, internal)
-
-
-def rc_post_data(**kw):
-    rc = utils.get_test_rc(**kw)
-    if 'manifest' not in rc:
-        rc['manifest'] = '''{
-            "metadata": {
-                "name": "name_of_rc"
-                },
-                "spec":{
-                    "replicas":2,
-                    "selector":{
-                        "name":"frontend"
-                    },
-                    "template":{
-                        "metadata":{
-                            "labels":{
-                                "name":"frontend"
-                            }
-                        },
-                        "spec":{
-                            "containers":[
-                                {
-                                    "name":"test-redis",
-                                    "image":"steak/for-dinner",
-                                    "ports":[
-                                        {
-                                            "containerPort":80,
-                                            "protocol":"TCP"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                   }
-               }
-           }'''
-    internal = rc_controller.ReplicationControllerPatchType.internal_attrs()
-    return remove_internal(rc, internal)
-
-
-def x509keypair_post_data(**kw):
-    x509keypair = utils.get_test_x509keypair(**kw)
-    internal = x509keypair_controller.X509KeyPairPatchType.internal_attrs()
-    return remove_internal(x509keypair, internal)
 
 
 def mservice_get_data(**kw):

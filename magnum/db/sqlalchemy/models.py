@@ -31,6 +31,8 @@ from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator, TEXT
 
+from magnum.i18n import _LE
+
 
 def table_args():
     engine_name = urlparse.urlparse(cfg.CONF.database.connection).scheme
@@ -51,10 +53,11 @@ class JsonEncodedType(TypeDecorator):
             # interface the consistent.
             value = self.type()
         elif not isinstance(value, self.type):
-            raise TypeError("%s supposes to store %s objects, but %s given"
-                            % (self.__class__.__name__,
-                               self.type.__name__,
-                               type(value).__name__))
+            raise TypeError(_LE("%(class)s supposes to store "
+                                "%(type)s objects, but %(value)s "
+                                "given") % {'class': self.__class__.__name__,
+                                            'type': self.type.__name__,
+                                            'value': type(value).__name__})
         serialized_value = json.dumps(value)
         return serialized_value
 
@@ -126,6 +129,8 @@ class Bay(Base):
     trustee_user_id = Column(String(255))
     # TODO(wanghua): encrypt trustee_password in db
     trustee_password = Column(String(255))
+    coe_version = Column(String(255))
+    container_version = Column(String(255))
     # (yuanying) if we use barbican,
     # cert_ref size is determined by below format
     # * http(s)://${DOMAIN_NAME}/v1/containers/${UUID}
@@ -155,11 +160,13 @@ class BayModel(Base):
     keypair_id = Column(String(255))
     external_network_id = Column(String(255))
     fixed_network = Column(String(255))
+    fixed_subnet = Column(String(255))
     network_driver = Column(String(255))
     volume_driver = Column(String(255))
     dns_nameserver = Column(String(255))
     apiserver_port = Column(Integer())
     docker_volume_size = Column(Integer())
+    docker_storage_driver = Column(String(255))
     cluster_distro = Column(String(255))
     coe = Column(String(255))
     http_proxy = Column(String(255))
@@ -170,88 +177,9 @@ class BayModel(Base):
     tls_disabled = Column(Boolean, default=False)
     public = Column(Boolean, default=False)
     server_type = Column(String(255))
-
-
-class Container(Base):
-    """Represents a container."""
-
-    __tablename__ = 'container'
-    __table_args__ = (
-        schema.UniqueConstraint('uuid', name='uniq_container0uuid'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    project_id = Column(String(255))
-    user_id = Column(String(255))
-    uuid = Column(String(36))
-    name = Column(String(255))
-    image = Column(String(255))
-    command = Column(String(255))
-    bay_uuid = Column(String(36))
-    status = Column(String(20))
-    memory = Column(String(255))
-    environment = Column(JSONEncodedDict)
-
-
-class Pod(Base):
-    """Represents a pod."""
-
-    __tablename__ = 'pod'
-    __table_args__ = (
-        schema.UniqueConstraint('uuid', name='uniq_pod0uuid'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    uuid = Column(String(36))
-    name = Column(String(255))
-    desc = Column(String(255))
-    bay_uuid = Column(String(36))
-    images = Column(JSONEncodedList)
-    labels = Column(JSONEncodedDict)
-    status = Column(String(255))
-    project_id = Column(String(255))
-    user_id = Column(String(255))
-    host = Column(String(255))
-
-
-class Service(Base):
-    """Represents a software service."""
-
-    __tablename__ = 'service'
-    __table_args__ = (
-        schema.UniqueConstraint('uuid', name='uniq_service0uuid'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    uuid = Column(String(36))
-    name = Column(String(255))
-    bay_uuid = Column(String(36))
-    labels = Column(JSONEncodedDict)
-    selector = Column(JSONEncodedDict)
-    ip = Column(String(36))
-    ports = Column(JSONEncodedList)
-    project_id = Column(String(255))
-    user_id = Column(String(255))
-
-
-class ReplicationController(Base):
-    """Represents a pod replication controller."""
-
-    __tablename__ = 'replicationcontroller'
-    __table_args__ = (
-        schema.UniqueConstraint('uuid',
-                                name='uniq_replicationcontroller0uuid'),
-        table_args()
-    )
-    id = Column(Integer, primary_key=True)
-    uuid = Column(String(36))
-    name = Column(String(255))
-    bay_uuid = Column(String(36))
-    images = Column(JSONEncodedList)
-    labels = Column(JSONEncodedDict)
-    replicas = Column(Integer())
-    project_id = Column(String(255))
-    user_id = Column(String(255))
+    insecure_registry = Column(String(255))
+    master_lb_enabled = Column(Boolean, default=False)
+    floating_ip_enabled = Column(Boolean, default=True)
 
 
 class X509KeyPair(Base):
@@ -264,11 +192,10 @@ class X509KeyPair(Base):
     )
     id = Column(Integer, primary_key=True)
     uuid = Column(String(36))
-    name = Column(String(255))
-    bay_uuid = Column(String(36))
-    ca_cert = Column(Text())
     certificate = Column(Text())
     private_key = Column(Text())
+    private_key_passphrase = Column(Text())
+    intermediates = Column(Text())
     project_id = Column(String(255))
     user_id = Column(String(255))
 

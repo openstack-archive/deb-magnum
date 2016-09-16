@@ -64,6 +64,7 @@ and neutron::
 
     # Enable barbican services
     enable_plugin barbican https://git.openstack.org/openstack/barbican
+    enable_plugin neutron-lbaas https://git.openstack.org/openstack/neutron-lbaas
 
     VOLUME_BACKING_FILE_SIZE=20G
     END
@@ -84,7 +85,7 @@ add the following line to your `local.conf` file::
     enable_plugin ceilometer git://git.openstack.org/openstack/ceilometer
 
 Create a local.sh to automatically make necessary networking changes during
-the devstack deployment process. This will allow bays spawned by magnum to
+the devstack deployment process. This will allow clusters spawned by magnum to
 access the internet through PUBLIC_INTERFACE::
 
     cat > local.sh << 'END_LOCAL_SH'
@@ -103,7 +104,7 @@ Run devstack::
 shipped with the milestone as the current master instructions are slightly
 incompatible.
 
-Prepare your session to be able to use the various openstack clients including
+Prepare your session to be able to use the various OpenStack clients including
 magnum, neutron, and glance. Create a new shell, and source the devstack openrc
 script::
 
@@ -113,17 +114,15 @@ Magnum has been tested with the Fedora Atomic micro-OS and CoreOS. Magnum will
 likely work with other micro-OS platforms, but each requires individual
 support in the heat template.
 
-Store the Fedora Atomic micro-OS in glance. (The steps for updating Fedora
-Atomic images are a bit detailed. Fortunately one of the core developers has
-made Atomic images available at https://fedorapeople.org/groups/magnum)::
+Store the Fedora Atomic micro-OS in glance. Download the qcow2 Atomic image
+from https://fedorapeople.org/groups/magnum/fedora-atomic-latest.qcow2 and
+then upload it to glance::
 
-    cd ~
-    wget https://fedorapeople.org/groups/magnum/fedora-21-atomic-5.qcow2
-    glance image-create --name fedora-21-atomic-5 \
+    glance image-create --name fedora-atomic-latest \
                         --visibility public \
                         --disk-format qcow2 \
                         --os-distro fedora-atomic \
-                        --container-format bare < fedora-21-atomic-5.qcow2
+                        --container-format bare < fedora-atomic-latest.qcow2
 
 Create a domain and domain admin for trust::
 
@@ -135,7 +134,7 @@ Create a domain and domain admin for trust::
     TRUSTEE_DOMAIN_ADMIN_ID=$(
         openstack user create trustee_domain_admin \
             --password "password" \
-            --domain= ${TRUSTEE_DOMAIN_ID} \
+            --domain=${TRUSTEE_DOMAIN_ID} \
             --or-show \
             -f value -c id
     )
@@ -143,7 +142,7 @@ Create a domain and domain admin for trust::
               --user $TRUSTEE_DOMAIN_ADMIN_ID --domain $TRUSTEE_DOMAIN_ID \
               admin
 
-Create a keypair for use with the baymodel::
+Create a keypair for use with the ClusterTemplate::
 
     test -f ~/.ssh/id_rsa.pub || ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
     nova keypair-add --pub-key ~/.ssh/id_rsa.pub testkey
@@ -175,6 +174,9 @@ Configure magnum::
     # copy policy.json
     sudo cp etc/magnum/policy.json /etc/magnum/policy.json
 
+    # copy api-paste.ini
+    sudo cp etc/magnum/api-paste.ini /etc/magnum/api-paste.ini
+
     # enable debugging output
     sudo sed -i "s/#debug\s*=.*/debug=true/" /etc/magnum/magnum.conf
 
@@ -190,14 +192,6 @@ Configure magnum::
     sudo sed -i "s/#connection\s*=.*/connection=mysql:\/\/root:password@localhost\/magnum/" \
              /etc/magnum/magnum.conf
 
-    # set Keystone account username
-    sudo sed -i "s/#admin_user\s*=.*/admin_user=admin/" \
-             /etc/magnum/magnum.conf
-
-    # set Keystone account password
-    sudo sed -i "s/#admin_password\s*=.*/admin_password=password/" \
-             /etc/magnum/magnum.conf
-
     # set admin Identity API endpoint
     sudo sed -i "s/#identity_uri\s*=.*/identity_uri=http:\/\/127.0.0.1:35357/" \
              /etc/magnum/magnum.conf
@@ -207,11 +201,11 @@ Configure magnum::
              /etc/magnum/magnum.conf
 
     # set trustee domain id
-    sudo sed -i "s/#trustee_domain_id\s*=.*/trustee_domain_id=${TRUSTEE_DOMAIN_ID}/" \
+    sudo sed -i "s/#trustee_domain_name\s*=.*/trustee_domain_name=magnum/" \
              /etc/magnum/magnum.conf
 
     # set trustee domain admin id
-    sudo sed -i "s/#trustee_domain_admin_id\s*=.*/trustee_domain_admin_id=${TRUSTEE_DOMAIN_ADMIN_ID}/" \
+    sudo sed -i "s/#trustee_domain_admin_name\s*=.*/trustee_domain_admin_name=trustee_domain_admin/" \
              /etc/magnum/magnum.conf
 
     # set trustee domain admin password
@@ -244,13 +238,15 @@ backend::
 Configure the keystone endpoint::
 
     openstack service create --name=magnum \
-                              --description="Magnum Container Service" \
-                              container
+                              --description="Container Infrastructure Management Service" \
+                              container-infra
     openstack endpoint create --region=RegionOne \
-                              --publicurl=http://127.0.0.1:9511/v1 \
-                              --internalurl=http://127.0.0.1:9511/v1 \
-                              --adminurl=http://127.0.0.1:9511/v1 \
-                              magnum
+                              container-infra public http://127.0.0.1:9511/v1
+    openstack endpoint create --region=RegionOne \
+                              container-infra internal http://127.0.0.1:9511/v1
+    openstack endpoint create --region=RegionOne \
+                              container-infra admin http://127.0.0.1:9511/v1
+
 
 Start the API service in a new screen::
 

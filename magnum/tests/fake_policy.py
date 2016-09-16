@@ -34,32 +34,11 @@ policy_data = """
     "baymodel:get_all": "",
     "baymodel:update": "",
 
-    "pod:create": "",
-    "pod:delete": "",
-    "pod:detail": "",
-    "pod:get": "",
-    "pod:get_all": "",
-    "pod:update": "",
-
     "rc:create": "",
     "rc:delete": "",
     "rc:detail": "",
     "rc:get": "",
     "rc:get_all": "",
-    "rc:update": "",
-
-    "service:create": "",
-    "service:delete": "",
-    "service:detail": "",
-    "service:get": "",
-    "service:get_all": "",
-    "service:update": "",
-
-    "container:create": "",
-    "container:delete": "",
-    "container:detail": "",
-    "container:get": "",
-    "container:get_all": "",
-    "container:update": ""
+    "rc:update": ""
 }
 """

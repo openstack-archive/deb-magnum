@@ -1,9 +1,9 @@
-# Shu Muto <shu-mutou@rf.jp.nec.com>, 2015. #zanata
+# Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: magnum 1.1.1.dev262\n"
-"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2016-01-17 07:33+0000\n"
+"Project-Id-Version: magnum 2.0.1.dev118\n"
+"Report-Msgid-Bugs-To: https://bugs.launchpad.net/openstack-i18n/\n"
+"POT-Creation-Date: 2016-04-18 02:46+0000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -41,10 +41,6 @@ msgid "'manifest' can't be empty"
 msgstr "「マニフェスト」は空にできません"
 
 #, python-format
-msgid "A ReplicationController with UUID %(uuid)s already exists."
-msgstr "UUID %(uuid)s の複製コントローラーは既に存在します。"
-
-#, python-format
 msgid "A baymodel with UUID %(uuid)s already exists."
 msgstr "UUID %(uuid)s のベイモデルは既に存在します。"
 
@@ -70,10 +66,6 @@ msgstr "Magnumサービス %(magnum_service_id)s が見つかりませんでし�
 #, python-format
 msgid "A magnum service with ID %(id)s already exists."
 msgstr "ID %(id)s を持つMagnumサービスは既に存在します。"
-
-#, python-format
-msgid "A node with UUID %(uuid)s already exists."
-msgstr "UUID %(uuid)s のノードは既に存在します。"
 
 #, python-format
 msgid "An object of class %s is required here"
@@ -122,9 +114,6 @@ msgstr "既存のベイモデルの UUID を上書きできません。"
 
 msgid "Cannot overwrite UUID for an existing Container."
 msgstr "既存のコンテナーの UUID を上書きできません。"
-
-msgid "Cannot overwrite UUID for an existing Node."
-msgstr "既存のノードの UUID を上書きできません。"
 
 msgid "Cannot overwrite UUID for an existing Pod."
 msgstr "既存のポッドの UUID を上書きできません。"
@@ -224,14 +213,6 @@ msgid "Instance %(instance)s could not be found."
 msgstr "インスタンス %(instance)s が見つかりませんでした。"
 
 #, python-format
-msgid ""
-"Instance %(instance_uuid)s is already associated with a node, it cannot be "
-"associated with this other node %(node)s"
-msgstr ""
-"インスタンス %(instance_uuid)s は既にノードに関連付けられており、この他のノー"
-"ド %(node)s に関連付けることはできません。"
-
-#, python-format
 msgid "Invalid URL scheme %s"
 msgstr "URL スキーム %s は無効です"
 
@@ -303,14 +284,6 @@ msgstr ""
 "ればなりません。"
 
 #, python-format
-msgid "Node %(node)s could not be found."
-msgstr "ノード %(node)s が見つかりませんでした。"
-
-#, python-format
-msgid "Node %(node)s is associated with instance %(instance)s."
-msgstr "ノード %(node)s はインスタンス %(instance)s に関連付けられています。"
-
-#, python-format
 msgid "Not authorized for image %(image_id)s."
 msgstr "イメージ %(image_id)s では許可されていません。"
 
@@ -342,6 +315,10 @@ msgstr ""
 msgid "Pod %(pod)s could not be found."
 msgstr "ポッド %(pod)s が見つかりませんでした。"
 
+#, python-format
+msgid "Policy doesn't allow %(action)s to be performed."
+msgstr "ポリシーにより %(action)s の実行が許可されていません"
+
 msgid "Private Key could not be read."
 msgstr "秘密鍵は読み込まれませんでした。"
 
@@ -359,10 +336,6 @@ msgid ""
 msgstr ""
 "OpenStack サービスとの通信に使用する Identity サービスカタログ内のリージョ"
 "ン。"
-
-#, python-format
-msgid "ReplicationController %(rc)s could not be found."
-msgstr "複製コントローラー %(rc)s が見つかりませんでした。"
 
 msgid "Request not acceptable."
 msgstr "要求は受け入れられませんでした。"

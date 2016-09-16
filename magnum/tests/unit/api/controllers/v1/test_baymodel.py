@@ -15,6 +15,7 @@ import datetime
 import mock
 from oslo_config import cfg
 from oslo_utils import timeutils
+from oslo_utils import uuidutils
 from six.moves.urllib import parse as urlparse
 from webtest.app import AppError
 from wsme import types as wtypes
@@ -23,7 +24,6 @@ from magnum.api import attr_validator
 from magnum.api.controllers.v1 import baymodel as api_baymodel
 from magnum.common import exception
 from magnum.common import policy as magnum_policy
-from magnum.common import utils
 from magnum.tests import base
 from magnum.tests.unit.api import base as api_base
 from magnum.tests.unit.api import utils as apiutils
@@ -41,18 +41,15 @@ class TestBayModelObject(base.TestCase):
 
 class TestListBayModel(api_base.FunctionalTest):
 
-    _baymodel_attrs = ('apiserver_port', 'name', 'tls_disabled',
-                       'registry_enabled', 'image_id', 'coe', 'server_type',
-                       'public',)
-    _expand_baymodel_attrs = ('name', 'apiserver_port', 'network_driver',
-                              'coe', 'flavor_id', 'fixed_network',
-                              'dns_nameserver', 'http_proxy',
-                              'docker_volume_size', 'server_type',
-                              'cluster_distro', 'external_network_id',
-                              'image_id', 'registry_enabled', 'no_proxy',
-                              'keypair_id', 'https_proxy', 'tls_disabled',
-                              'public', 'labels', 'master_flavor_id',
-                              'volume_driver')
+    _baymodel_attrs = ('name', 'apiserver_port', 'network_driver',
+                       'coe', 'flavor_id', 'fixed_network',
+                       'dns_nameserver', 'http_proxy',
+                       'docker_volume_size', 'server_type',
+                       'cluster_distro', 'external_network_id',
+                       'image_id', 'registry_enabled', 'no_proxy',
+                       'keypair_id', 'https_proxy', 'tls_disabled',
+                       'public', 'labels', 'master_flavor_id',
+                       'volume_driver', 'insecure_registry')
 
     def test_empty(self):
         response = self.get_json('/baymodels')
@@ -62,25 +59,20 @@ class TestListBayModel(api_base.FunctionalTest):
         baymodel = obj_utils.create_test_baymodel(self.context)
         response = self.get_json('/baymodels')
         self.assertEqual(baymodel.uuid, response['baymodels'][0]["uuid"])
-        self._verify_attrs(self._baymodel_attrs, response['baymodels'][0])
-
-        # Verify attrs that should not appear from response
-        none_attrs = (set(self._expand_baymodel_attrs) -
-                      set(self._baymodel_attrs))
-        self._verify_attrs(none_attrs, response['baymodels'][0],
-                           positive=False)
+        self._verify_attrs(self._baymodel_attrs,
+                           response['baymodels'][0])
 
     def test_get_one(self):
         baymodel = obj_utils.create_test_baymodel(self.context)
         response = self.get_json('/baymodels/%s' % baymodel['uuid'])
         self.assertEqual(baymodel.uuid, response['uuid'])
-        self._verify_attrs(self._expand_baymodel_attrs, response)
+        self._verify_attrs(self._baymodel_attrs, response)
 
     def test_get_one_by_name(self):
         baymodel = obj_utils.create_test_baymodel(self.context)
         response = self.get_json('/baymodels/%s' % baymodel['name'])
         self.assertEqual(baymodel.uuid, response['uuid'])
-        self._verify_attrs(self._expand_baymodel_attrs, response)
+        self._verify_attrs(self._baymodel_attrs, response)
 
     def test_get_one_by_name_not_found(self):
         response = self.get_json(
@@ -93,10 +85,10 @@ class TestListBayModel(api_base.FunctionalTest):
     def test_get_one_by_name_multiple_baymodel(self):
         obj_utils.create_test_baymodel(
             self.context, name='test_baymodel',
-            uuid=utils.generate_uuid())
+            uuid=uuidutils.generate_uuid())
         obj_utils.create_test_baymodel(
             self.context, name='test_baymodel',
-            uuid=utils.generate_uuid())
+            uuid=uuidutils.generate_uuid())
         response = self.get_json(
             '/baymodels/test_baymodel',
             expect_errors=True)
@@ -109,7 +101,7 @@ class TestListBayModel(api_base.FunctionalTest):
         for id_ in range(4):
             baymodel = obj_utils.create_test_baymodel(
                 self.context, id=id_,
-                uuid=utils.generate_uuid())
+                uuid=uuidutils.generate_uuid())
             bm_list.append(baymodel)
 
         response = self.get_json('/baymodels?limit=3&marker=%s'
@@ -121,7 +113,7 @@ class TestListBayModel(api_base.FunctionalTest):
         baymodel = obj_utils.create_test_baymodel(self.context)
         response = self.get_json('/baymodels/detail')
         self.assertEqual(baymodel.uuid, response['baymodels'][0]["uuid"])
-        self._verify_attrs(self._expand_baymodel_attrs,
+        self._verify_attrs(self._baymodel_attrs,
                            response['baymodels'][0])
 
     def test_detail_with_pagination_marker(self):
@@ -129,14 +121,14 @@ class TestListBayModel(api_base.FunctionalTest):
         for id_ in range(4):
             baymodel = obj_utils.create_test_baymodel(
                 self.context, id=id_,
-                uuid=utils.generate_uuid())
+                uuid=uuidutils.generate_uuid())
             bm_list.append(baymodel)
 
         response = self.get_json('/baymodels/detail?limit=3&marker=%s'
                                  % bm_list[2].uuid)
         self.assertEqual(1, len(response['baymodels']))
         self.assertEqual(bm_list[-1].uuid, response['baymodels'][0]['uuid'])
-        self._verify_attrs(self._expand_baymodel_attrs,
+        self._verify_attrs(self._baymodel_attrs,
                            response['baymodels'][0])
 
     def test_detail_against_single(self):
@@ -150,7 +142,7 @@ class TestListBayModel(api_base.FunctionalTest):
         for id_ in range(5):
             baymodel = obj_utils.create_test_baymodel(
                 self.context, id=id_,
-                uuid=utils.generate_uuid())
+                uuid=uuidutils.generate_uuid())
             bm_list.append(baymodel.uuid)
         response = self.get_json('/baymodels')
         self.assertEqual(len(bm_list), len(response['baymodels']))
@@ -158,7 +150,7 @@ class TestListBayModel(api_base.FunctionalTest):
         self.assertEqual(sorted(bm_list), sorted(uuids))
 
     def test_links(self):
-        uuid = utils.generate_uuid()
+        uuid = uuidutils.generate_uuid()
         obj_utils.create_test_baymodel(self.context, id=1, uuid=uuid)
         response = self.get_json('/baymodels/%s' % uuid)
         self.assertIn('links', response.keys())
@@ -171,7 +163,7 @@ class TestListBayModel(api_base.FunctionalTest):
     def test_collection_links(self):
         for id_ in range(5):
             obj_utils.create_test_baymodel(self.context, id=id_,
-                                           uuid=utils.generate_uuid())
+                                           uuid=uuidutils.generate_uuid())
         response = self.get_json('/baymodels/?limit=3')
         self.assertEqual(3, len(response['baymodels']))
 
@@ -182,7 +174,7 @@ class TestListBayModel(api_base.FunctionalTest):
         cfg.CONF.set_override('max_limit', 3, 'api')
         for id_ in range(5):
             obj_utils.create_test_baymodel(self.context, id=id_,
-                                           uuid=utils.generate_uuid())
+                                           uuid=uuidutils.generate_uuid())
         response = self.get_json('/baymodels')
         self.assertEqual(3, len(response['baymodels']))
 
@@ -215,7 +207,7 @@ class TestPatch(api_base.FunctionalTest):
         )
 
     def test_update_not_found(self):
-        uuid = utils.generate_uuid()
+        uuid = uuidutils.generate_uuid()
         response = self.patch_json('/baymodels/%s' % uuid,
                                    [{'path': '/name',
                                      'value': 'bay_model_example_B',
@@ -258,6 +250,28 @@ class TestPatch(api_base.FunctionalTest):
                           '/baymodels/%s' % self.baymodel.uuid,
                           [{'path': '/public', 'value': True,
                             'op': 'replace'}])
+
+    def test_update_baymodel_with_bay_allow_update(self):
+        baymodel = obj_utils.create_test_baymodel(self.context)
+        obj_utils.create_test_bay(self.context, baymodel_id=baymodel.uuid)
+        response = self.patch_json('/baymodels/%s' % baymodel.uuid,
+                                   [{'path': '/public',
+                                     'value': True,
+                                     'op': 'replace'}],
+                                   expect_errors=True)
+        self.assertEqual(200, response.status_int)
+        response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
+        self.assertEqual(response['public'], True)
+
+    def test_update_baymodel_with_bay_not_allow_update(self):
+        baymodel = obj_utils.create_test_baymodel(self.context)
+        obj_utils.create_test_bay(self.context, baymodel_id=baymodel.uuid)
+        response = self.patch_json('/baymodels/%s' % baymodel.uuid,
+                                   [{'path': '/name',
+                                     'value': 'new_name',
+                                     'op': 'replace'}],
+                                   expect_errors=True)
+        self.assertEqual(400, response.status_code)
 
     @mock.patch('oslo_utils.timeutils.utcnow')
     def test_replace_singular(self, mock_utcnow):
@@ -321,7 +335,8 @@ class TestPatch(api_base.FunctionalTest):
         self.assertTrue(response.json['errors'])
 
     def test_replace_baymodel_with_no_exist_external_network_id(self):
-        self.mock_valid_os_res.side_effect = exception.NetworkNotFound("aaa")
+        self.mock_valid_os_res.side_effect = exception.ExternalNetworkNotFound(
+            "aaa")
         response = self.patch_json('/baymodels/%s' % self.baymodel.uuid,
                                    [{'path': '/external_network_id',
                                      'value': 'aaa',
@@ -353,38 +368,37 @@ class TestPatch(api_base.FunctionalTest):
         self.assertTrue(response.json['errors'])
 
     def test_remove_singular(self):
-        baymodel = obj_utils.create_test_baymodel(self.context,
-                                                  uuid=utils.generate_uuid())
-        response = self.get_json('/baymodels/%s' % baymodel.uuid)
+        response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
         self.assertIsNotNone(response['dns_nameserver'])
 
-        response = self.patch_json('/baymodels/%s' % baymodel.uuid,
+        response = self.patch_json('/baymodels/%s' % self.baymodel.uuid,
                                    [{'path': '/dns_nameserver',
                                      'op': 'remove'}])
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(200, response.status_code)
 
-        response = self.get_json('/baymodels/%s' % baymodel.uuid)
+        response = self.get_json('/baymodels/%s' % self.baymodel.uuid)
         self.assertIsNone(response['dns_nameserver'])
         # Assert nothing else was changed
-        self.assertEqual(baymodel.uuid, response['uuid'])
-        self.assertEqual(baymodel.name, response['name'])
-        self.assertEqual(baymodel.apiserver_port, response['apiserver_port'])
-        self.assertEqual(baymodel.image_id,
+        self.assertEqual(self.baymodel.uuid, response['uuid'])
+        self.assertEqual(self.baymodel.name, response['name'])
+        self.assertEqual(self.baymodel.apiserver_port,
+                         response['apiserver_port'])
+        self.assertEqual(self.baymodel.image_id,
                          response['image_id'])
-        self.assertEqual(baymodel.fixed_network,
+        self.assertEqual(self.baymodel.fixed_network,
                          response['fixed_network'])
-        self.assertEqual(baymodel.network_driver,
+        self.assertEqual(self.baymodel.network_driver,
                          response['network_driver'])
-        self.assertEqual(baymodel.volume_driver,
+        self.assertEqual(self.baymodel.volume_driver,
                          response['volume_driver'])
-        self.assertEqual(baymodel.docker_volume_size,
+        self.assertEqual(self.baymodel.docker_volume_size,
                          response['docker_volume_size'])
-        self.assertEqual(baymodel.coe, response['coe'])
-        self.assertEqual(baymodel.http_proxy, response['http_proxy'])
-        self.assertEqual(baymodel.https_proxy, response['https_proxy'])
-        self.assertEqual(baymodel.no_proxy, response['no_proxy'])
-        self.assertEqual(baymodel.labels, response['labels'])
+        self.assertEqual(self.baymodel.coe, response['coe'])
+        self.assertEqual(self.baymodel.http_proxy, response['http_proxy'])
+        self.assertEqual(self.baymodel.https_proxy, response['https_proxy'])
+        self.assertEqual(self.baymodel.no_proxy, response['no_proxy'])
+        self.assertEqual(self.baymodel.labels, response['labels'])
 
     def test_remove_non_existent_property_fail(self):
         response = self.patch_json('/baymodels/%s' % self.baymodel.uuid,
@@ -395,10 +409,10 @@ class TestPatch(api_base.FunctionalTest):
         self.assertTrue(response.json['errors'])
 
     def test_remove_mandatory_property_fail(self):
-        mandatory_properties = ('/image_id', '/keypair_id',
-                                '/external_network_id', '/coe',
+        mandatory_properties = ('/image_id', '/keypair_id', '/coe',
+                                '/external_network_id', '/server_type',
                                 '/tls_disabled', '/public',
-                                '/registry_enabled', '/server_type',
+                                '/registry_enabled',
                                 '/cluster_distro', '/network_driver')
         for p in mandatory_properties:
             response = self.patch_json('/baymodels/%s' % self.baymodel.uuid,
@@ -512,7 +526,7 @@ class TestPost(api_base.FunctionalTest):
                   "dns_nameserver", "keypair_id", "external_network_id",
                   "cluster_distro", "fixed_network", "apiserver_port",
                   "docker_volume_size", "labels", "http_proxy", "https_proxy",
-                  "no_proxy", "network_driver", "volume_driver"]
+                  "no_proxy", "network_driver", "volume_driver", "coe"]
         for field in fields:
             self._create_baymodel_raises_app_error(**{field: ''})
 
@@ -525,6 +539,12 @@ class TestPost(api_base.FunctionalTest):
     def test_create_baymodel_with_invalid_docker_volume_size(self):
         self._create_baymodel_raises_app_error(docker_volume_size=0)
         self._create_baymodel_raises_app_error(docker_volume_size=-1)
+        self._create_baymodel_raises_app_error(
+            docker_volume_size=1,
+            docker_storage_driver="devicemapper")
+        self._create_baymodel_raises_app_error(
+            docker_volume_size=2,
+            docker_storage_driver="devicemapper")
         self._create_baymodel_raises_app_error(docker_volume_size='notanint')
 
     def test_create_baymodel_with_invalid_dns_nameserver(self):
@@ -568,6 +588,20 @@ class TestPost(api_base.FunctionalTest):
             self.assertNotIn('id', cc_mock.call_args[0][0])
 
     @mock.patch('magnum.api.attr_validator.validate_image')
+    def test_create_baymodel_with_overlay(self, mock_image_data):
+        with mock.patch.object(self.dbapi, 'create_baymodel',
+                               wraps=self.dbapi.create_baymodel) as cc_mock:
+            mock_image_data.return_value = {'name': 'mock_name',
+                                            'os_distro': 'fedora-atomic'}
+            bdict = apiutils.baymodel_post_data(
+                docker_volume_size=1, docker_storage_driver="overlay")
+            response = self.post_json('/baymodels', bdict)
+            self.assertEqual(bdict['docker_volume_size'],
+                             response.json['docker_volume_size'])
+            cc_mock.assert_called_once_with(mock.ANY)
+            self.assertNotIn('id', cc_mock.call_args[0][0])
+
+    @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_baymodel_generate_uuid(self,
                                            mock_image_data):
         # TODO(hongbin): Is this test correct?
@@ -601,7 +635,7 @@ class TestPost(api_base.FunctionalTest):
                                  response.json['image_id'])
                 cc_mock.assert_called_once_with(mock.ANY)
                 self.assertNotIn('id', cc_mock.call_args[0][0])
-                self.assertTrue(utils.is_uuid_like(response.json['uuid']))
+                self.assertTrue(uuidutils.is_uuid_like(response.json['uuid']))
 
     def test_create_baymodel_with_network_driver(self):
         baymodel_dict = {'coe': 'kubernetes', 'network_driver': 'flannel'}
@@ -831,12 +865,25 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_baymodel_with_no_exist_external_network(self,
                                                             mock_image_data):
-        self.mock_valid_os_res.side_effect = exception.NetworkNotFound("test")
+        self.mock_valid_os_res.side_effect = exception.ExternalNetworkNotFound(
+            "test")
         mock_image_data.return_value = {'name': 'mock_name',
                                         'os_distro': 'fedora-atomic'}
         bdict = apiutils.baymodel_post_data()
         response = self.post_json('/baymodels', bdict, expect_errors=True)
         self.assertEqual(400, response.status_int)
+
+    @mock.patch('magnum.api.attr_validator.validate_image')
+    def test_create_baymodel_without_name(self, mock_image_data):
+        with mock.patch.object(self.dbapi, 'create_baymodel',
+                               wraps=self.dbapi.create_baymodel):
+            mock_image_data.return_value = {'name': 'mock_name',
+                                            'os_distro': 'fedora-atomic'}
+            bdict = apiutils.baymodel_post_data()
+            bdict.pop('name')
+            resp = self.post_json('/baymodels', bdict)
+            self.assertEqual(201, resp.status_int)
+            self.assertIsNotNone(resp.json['name'])
 
 
 class TestDelete(api_base.FunctionalTest):
@@ -861,7 +908,7 @@ class TestDelete(api_base.FunctionalTest):
         self.assertIn(baymodel.uuid, response.json['errors'][0]['detail'])
 
     def test_delete_baymodel_not_found(self):
-        uuid = utils.generate_uuid()
+        uuid = uuidutils.generate_uuid()
         response = self.delete('/baymodels/%s' % uuid, expect_errors=True)
         self.assertEqual(404, response.status_int)
         self.assertEqual('application/json', response.content_type)
@@ -881,9 +928,9 @@ class TestDelete(api_base.FunctionalTest):
 
     def test_delete_multiple_baymodel_by_name(self):
         obj_utils.create_test_baymodel(self.context, name='test_baymodel',
-                                       uuid=utils.generate_uuid())
+                                       uuid=uuidutils.generate_uuid())
         obj_utils.create_test_baymodel(self.context, name='test_baymodel',
-                                       uuid=utils.generate_uuid())
+                                       uuid=uuidutils.generate_uuid())
         response = self.delete('/baymodels/test_baymodel', expect_errors=True)
         self.assertEqual(409, response.status_int)
         self.assertEqual('application/json', response.content_type)
@@ -916,13 +963,14 @@ class TestBayModelPolicyEnforcement(api_base.FunctionalTest):
     def test_policy_disallow_detail(self):
         self._common_policy_check(
             "baymodel:detail", self.get_json,
-            '/baymodels/%s/detail' % utils.generate_uuid(),
+            '/baymodels/%s/detail' % uuidutils.generate_uuid(),
             expect_errors=True)
 
     def test_policy_disallow_update(self):
-        baymodel = obj_utils.create_test_baymodel(self.context,
-                                                  name='example_A',
-                                                  uuid=utils.generate_uuid())
+        baymodel = obj_utils.create_test_baymodel(
+            self.context,
+            name='example_A',
+            uuid=uuidutils.generate_uuid())
         self._common_policy_check(
             "baymodel:update", self.patch_json,
             '/baymodels/%s' % baymodel.name,

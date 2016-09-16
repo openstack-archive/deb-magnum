@@ -15,24 +15,21 @@
 import datetime
 import gettext
 
-import iso8601
 import mock
-import netaddr
-from oslo_utils import timeutils
+from oslo_versionedobjects import exception as object_exception
 from oslo_versionedobjects import fields
 from oslo_versionedobjects import fixture
 
 from magnum.common import context as magnum_context
-from magnum.common import exception
 from magnum.objects import base
-from magnum.objects import utils
 from magnum.tests import base as test_base
 
 gettext.install('magnum')
 
 
 @base.MagnumObjectRegistry.register
-class MyObj(base.MagnumObject):
+class MyObj(base.MagnumPersistentObject, base.MagnumObject,
+            base.MagnumObjectDictCompat):
     VERSION = '1.0'
 
     fields = {'foo': fields.IntegerField(),
@@ -75,7 +72,7 @@ class MyObj(base.MagnumObject):
     @base.remotable
     def modify_save_modify(self, context):
         self.bar = 'meow'
-        self.save()
+        self.save(context)
         self.foo = 42
 
 
@@ -89,84 +86,23 @@ class MyObj2(object):
         pass
 
 
+@base.MagnumObjectRegistry.register_if(False)
 class TestSubclassedObject(MyObj):
     fields = {'new_field': fields.StringField()}
-
-
-class TestUtils(test_base.TestCase):
-
-    def test_datetime_or_none(self):
-        naive_dt = timeutils.utcnow()
-        dt = timeutils.parse_isotime(datetime.datetime.isoformat(naive_dt))
-        self.assertEqual(dt, utils.datetime_or_none(dt))
-        self.assertEqual(naive_dt.replace(tzinfo=iso8601.iso8601.Utc()),
-                         utils.datetime_or_none(dt))
-        self.assertIsNone(utils.datetime_or_none(None))
-        self.assertRaises(ValueError, utils.datetime_or_none, 'foo')
-
-    def test_datetime_or_str_or_none(self):
-        dts = datetime.datetime.isoformat(timeutils.utcnow())
-        dt = timeutils.parse_isotime(dts)
-        self.assertEqual(dt, utils.datetime_or_str_or_none(dt))
-        self.assertIsNone(utils.datetime_or_str_or_none(None))
-        self.assertEqual(dt, utils.datetime_or_str_or_none(dts))
-        self.assertRaises(ValueError, utils.datetime_or_str_or_none, 'foo')
-
-    def test_int_or_none(self):
-        self.assertEqual(1, utils.int_or_none(1))
-        self.assertEqual(1, utils.int_or_none('1'))
-        self.assertIsNone(utils.int_or_none(None))
-        self.assertRaises(ValueError, utils.int_or_none, 'foo')
-
-    def test_str_or_none(self):
-        class Obj(object):
-            pass
-        self.assertEqual('foo', utils.str_or_none('foo'))
-        self.assertEqual('1', utils.str_or_none(1))
-        self.assertIsNone(utils.str_or_none(None))
-
-    def test_ip_or_none(self):
-        ip4 = netaddr.IPAddress('1.2.3.4', 4)
-        ip6 = netaddr.IPAddress('1::2', 6)
-        self.assertEqual(ip4, utils.ip_or_none(4)('1.2.3.4'))
-        self.assertEqual(ip6, utils.ip_or_none(6)('1::2'))
-        self.assertIsNone(utils.ip_or_none(4)(None))
-        self.assertIsNone(utils.ip_or_none(6)(None))
-        self.assertRaises(netaddr.AddrFormatError, utils.ip_or_none(4), 'foo')
-        self.assertRaises(netaddr.AddrFormatError, utils.ip_or_none(6), 'foo')
-
-    def test_dt_serializer(self):
-        class Obj(object):
-            foo = utils.dt_serializer('bar')
-
-        obj = Obj()
-        obj.bar = timeutils.parse_isotime('1955-11-05T00:00:00Z')
-        self.assertEqual('1955-11-05T00:00:00+00:00', obj.foo())
-        obj.bar = None
-        self.assertIsNone(obj.foo())
-        obj.bar = 'foo'
-        self.assertRaises(TypeError, obj.foo)
-
-    def test_dt_deserializer(self):
-        dt = timeutils.parse_isotime('1955-11-05T00:00:00Z')
-        self.assertEqual(dt, utils.dt_deserializer(None,
-                         datetime.datetime.isoformat(dt)))
-        self.assertIsNone(utils.dt_deserializer(None, None))
-        self.assertRaises(ValueError, utils.dt_deserializer, None, 'foo')
 
 
 class _TestObject(object):
     def test_hydration_type_error(self):
         primitive = {'magnum_object.name': 'MyObj',
                      'magnum_object.namespace': 'magnum',
-                     'magnum_object.version': '1.5',
+                     'magnum_object.version': '1.0',
                      'magnum_object.data': {'foo': 'a'}}
         self.assertRaises(ValueError, MyObj.obj_from_primitive, primitive)
 
     def test_hydration(self):
         primitive = {'magnum_object.name': 'MyObj',
                      'magnum_object.namespace': 'magnum',
-                     'magnum_object.version': '1.5',
+                     'magnum_object.version': '1.0',
                      'magnum_object.data': {'foo': 1}}
         obj = MyObj.obj_from_primitive(primitive)
         self.assertEqual(1, obj.foo)
@@ -174,15 +110,15 @@ class _TestObject(object):
     def test_hydration_bad_ns(self):
         primitive = {'magnum_object.name': 'MyObj',
                      'magnum_object.namespace': 'foo',
-                     'magnum_object.version': '1.5',
+                     'magnum_object.version': '1.0',
                      'magnum_object.data': {'foo': 1}}
-        self.assertRaises(exception.UnsupportedObjectError,
+        self.assertRaises(object_exception.UnsupportedObjectError,
                           MyObj.obj_from_primitive, primitive)
 
     def test_dehydration(self):
         expected = {'magnum_object.name': 'MyObj',
                     'magnum_object.namespace': 'magnum',
-                    'magnum_object.version': '1.5',
+                    'magnum_object.version': '1.0',
                     'magnum_object.data': {'foo': 1}}
         obj = MyObj(self.context)
         obj.foo = 1
@@ -215,15 +151,19 @@ class _TestObject(object):
         self.assertEqual('loaded!', obj.bar)
 
     def test_load_in_base(self):
-        class Foo(base.MagnumObject):
+        @base.MagnumObjectRegistry.register_if(False)
+        class Foo(base.MagnumPersistentObject, base.MagnumObject,
+                  base.MagnumObjectDictCompat):
             fields = {'foobar': fields.IntegerField()}
         obj = Foo(self.context)
         # NOTE(danms): Can't use assertRaisesRegexp() because of py26
         raised = False
+        ex = None
         try:
             obj.foobar
-        except NotImplementedError as ex:
+        except NotImplementedError as e:
             raised = True
+            ex = e
         self.assertTrue(raised)
         self.assertIn('foobar', str(ex))
 
@@ -252,7 +192,7 @@ class _TestObject(object):
         self.assertEqual(set(), obj2.obj_what_changed())
 
     def test_unknown_objtype(self):
-        self.assertRaises(exception.UnsupportedObjectError,
+        self.assertRaises(object_exception.UnsupportedObjectError,
                           base.MagnumObject.obj_class_from_name, 'foo', '1.0')
 
     def test_with_alternate_context(self):
@@ -261,14 +201,12 @@ class _TestObject(object):
         obj = MyObj.query(context1)
         obj.update_test(context2)
         self.assertEqual('alternate-context', obj.bar)
-        self.assertRemotes()
 
     def test_orphaned_object(self):
         obj = MyObj.query(self.context)
         obj._context = None
-        self.assertRaises(exception.OrphanedObjectError,
+        self.assertRaises(object_exception.OrphanedObjectError,
                           obj.update_test)
-        self.assertRemotes()
 
     def test_changed_1(self):
         obj = MyObj.query(self.context)
@@ -277,26 +215,23 @@ class _TestObject(object):
         obj.update_test(self.context)
         self.assertEqual(set(['foo', 'bar']), obj.obj_what_changed())
         self.assertEqual(123, obj.foo)
-        self.assertRemotes()
 
     def test_changed_2(self):
         obj = MyObj.query(self.context)
         obj.foo = 123
         self.assertEqual(set(['foo']), obj.obj_what_changed())
-        obj.save()
+        obj.save(self.context)
         self.assertEqual(set([]), obj.obj_what_changed())
         self.assertEqual(123, obj.foo)
-        self.assertRemotes()
 
     def test_changed_3(self):
         obj = MyObj.query(self.context)
         obj.foo = 123
         self.assertEqual(set(['foo']), obj.obj_what_changed())
-        obj.refresh()
+        obj.refresh(self.context)
         self.assertEqual(set([]), obj.obj_what_changed())
         self.assertEqual(321, obj.foo)
         self.assertEqual('refreshed', obj.bar)
-        self.assertRemotes()
 
     def test_changed_4(self):
         obj = MyObj.query(self.context)
@@ -306,24 +241,22 @@ class _TestObject(object):
         self.assertEqual(set(['foo']), obj.obj_what_changed())
         self.assertEqual(42, obj.foo)
         self.assertEqual('meow', obj.bar)
-        self.assertRemotes()
 
     def test_static_result(self):
         obj = MyObj.query(self.context)
         self.assertEqual('bar', obj.bar)
-        result = obj.marco()
+        result = obj.marco(self.context)
         self.assertEqual('polo', result)
-        self.assertRemotes()
 
     def test_updates(self):
         obj = MyObj.query(self.context)
         self.assertEqual(1, obj.foo)
-        obj.update_test()
+        obj.update_test(self.context)
         self.assertEqual('updated', obj.bar)
-        self.assertRemotes()
 
     def test_base_attributes(self):
         dt = datetime.datetime(1955, 11, 5)
+        datatime = fields.DateTimeField()
         obj = MyObj(self.context)
         obj.created_at = dt
         obj.updated_at = dt
@@ -333,8 +266,8 @@ class _TestObject(object):
                     'magnum_object.changes':
                         ['created_at', 'updated_at'],
                     'magnum_object.data':
-                        {'created_at': datetime.datetime.isoformat(dt),
-                         'updated_at': datetime.datetime.isoformat(dt)}
+                        {'created_at': datatime.stringify(dt),
+                         'updated_at': datatime.stringify(dt)}
                     }
         actual = obj.obj_to_primitive()
         # magnum_object.changes is built from a set and order is undefined
@@ -374,7 +307,7 @@ class _TestObject(object):
         self.assertRaises(AttributeError, obj.get, 'nothing', 3)
 
     def test_object_inheritance(self):
-        base_fields = list(base.MagnumObject.fields.keys())
+        base_fields = list(base.MagnumPersistentObject.fields.keys())
         myobj_fields = ['foo', 'bar', 'missing'] + base_fields
         myobj3_fields = ['new_field']
         self.assertTrue(issubclass(TestSubclassedObject, MyObj))
@@ -396,7 +329,9 @@ class _TestObject(object):
         self.assertEqual({}, obj.obj_get_changes())
 
     def test_obj_fields(self):
-        class TestObj(base.MagnumObject):
+        @base.MagnumObjectRegistry.register_if(False)
+        class TestObj(base.MagnumPersistentObject, base.MagnumObject,
+                      base.MagnumObjectDictCompat):
             fields = {'foo': fields.IntegerField()}
             obj_extra_fields = ['bar']
 
@@ -415,6 +350,10 @@ class _TestObject(object):
         self.assertEqual(set(['foo', 'bar']), obj.obj_what_changed())
 
 
+class TestObject(test_base.TestCase, _TestObject):
+    pass
+
+
 # This is a static dictionary that holds all fingerprints of the versioned
 # objects registered with the MagnumRegistry. Each fingerprint contains
 # the version of the object and an md5 hash of RPC-critical parts of the
@@ -423,15 +362,12 @@ class _TestObject(object):
 # For more information on object version testing, read
 # http://docs.openstack.org/developer/magnum/objects.html
 object_data = {
-    'Bay': '1.5-a3b9292ef5d35175b93ca46ba3baec2d',
-    'BayModel': '1.10-759aea0021329a0c413e1d9d5179dda2',
+    'Bay': '1.7-88cb12f991721fe31602dc3fd7acd654',
+    'BayModel': '1.15-9b961246b348aa380783dae14014e423',
     'Certificate': '1.0-2aff667971b85c1edf8d15684fd7d5e2',
-    'Container': '1.3-e2d9d2e8a8844d421148cd9fde6c6bd6',
     'MyObj': '1.0-b43567e512438205e32f4e95ca616697',
-    'Pod': '1.1-39f221ad1dad0eb7f7bee3569d42fa7e',
-    'ReplicationController': '1.0-a471c2429c212ed91833cfcf0f934eab',
-    'Service': '1.0-f4a1c5a4618708824a553568c1ada0ea',
-    'X509KeyPair': '1.1-4aecc268e23e32b8a762d43ba1a4b159',
+    'MyObj': '1.0-34c4b1aadefd177b13f9a2f894cc23cd',
+    'X509KeyPair': '1.2-d81950af36c59a71365e33ce539d24f9',
     'MagnumService': '1.0-2d397ec59b0046bd5ec35cd3e06efeca',
 }
 

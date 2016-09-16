@@ -130,6 +130,19 @@ class HackingTestCase(base.TestCase):
         code = "self.assertIsNone()"
         self._assert_has_no_errors(code, check)
 
+    def test_assert_not_equal_none(self):
+        errors = [(1, 0, "M319")]
+        check = checks.assert_not_equal_none
+
+        code = "self.assertNotEqual(A, None)"
+        self._assert_has_errors(code, check, errors)
+
+        code = "self.assertNotEqual(None, A)"
+        self._assert_has_errors(code, check, errors)
+
+        code = "self.assertIsNotNone()"
+        self._assert_has_no_errors(code, check)
+
     def test_assert_equal_true_or_false(self):
         errors = [(1, 0, "M323")]
         check = checks.assert_equal_true_or_false
@@ -166,7 +179,7 @@ class HackingTestCase(base.TestCase):
         code = "self.assertEqual(A is not None)"
         self._assert_has_errors(code, check, errors)
 
-        code = "self.assertIsNone()"
+        code = "self.assertIsNotNone()"
         self._assert_has_no_errors(code, check)
 
     def test_assert_true_isinstance(self):
@@ -178,6 +191,51 @@ class HackingTestCase(base.TestCase):
 
         code = "self.assertTrue()"
         self._assert_has_no_errors(code, check)
+
+    def test_no_xrange(self):
+        errors = [(1, 0, "M339")]
+        check = checks.no_xrange
+
+        code = "xrange(45)"
+        self._assert_has_errors(code, check, errors)
+
+        code = "range(45)"
+        self._assert_has_no_errors(code, check)
+
+    def test_no_log_warn(self):
+        errors = [(1, 0, "M352")]
+        check = checks.no_log_warn
+        code = """
+                  LOG.warn("LOG.warn is deprecated")
+               """
+        self._assert_has_errors(code, check, errors)
+
+        code = """
+                  LOG.warning("LOG.warn is deprecated")
+               """
+        self._assert_has_no_errors(code, check)
+
+    def test_log_translations(self):
+        logs = ['audit', 'error', 'info', 'warning', 'critical', 'warn',
+                'exception']
+        levels = ['_LI', '_LW', '_LE', '_LC']
+        debug = "LOG.debug('OK')"
+        self.assertEqual(
+            0, len(list(checks.validate_log_translations(debug, debug))))
+        for log in logs:
+            bad = 'LOG.%s("Bad")' % log
+            self.assertEqual(
+                1, len(list(checks.validate_log_translations(bad, bad))))
+            ok = "LOG.%s('OK')    # noqa" % log
+            self.assertEqual(
+                0, len(list(checks.validate_log_translations(ok, ok))))
+            ok = "LOG.%s(variable)" % log
+            self.assertEqual(
+                0, len(list(checks.validate_log_translations(ok, ok))))
+            for level in levels:
+                ok = "LOG.%s(%s('OK'))" % (log, level)
+                self.assertEqual(
+                    0, len(list(checks.validate_log_translations(ok, ok))))
 
     def test_use_timeunitls_utcow(self):
         errors = [(1, 0, "M310")]
@@ -222,3 +280,32 @@ class HackingTestCase(base.TestCase):
 
         self.assertEqual(0, len(list(checks.dict_constructor_with_list_copy(
             "      self._render_dict(xml, data_el, data.__dict__)"))))
+
+    def test_check_explicit_underscore_import(self):
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "LOG.info(_('My info message'))",
+            "magnum/tests/other_files.py"))), 1)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "msg = _('My message')",
+            "magnum/tests/other_files.py"))), 1)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "from magnum.i18n import _",
+            "magnum/tests/other_files.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "LOG.info(_('My info message'))",
+            "magnum/tests/other_files.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "msg = _('My message')",
+            "magnum/tests/other_files.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "from magnum.i18n import _, _LW",
+            "magnum/tests/other_files2.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "msg = _('My message')",
+            "magnum/tests/other_files2.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "_ = translations.ugettext",
+            "magnum/tests/other_files3.py"))), 0)
+        self.assertEqual(len(list(checks.check_explicit_underscore_import(
+            "msg = _('My message')",
+            "magnum/tests/other_files3.py"))), 0)

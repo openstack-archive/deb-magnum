@@ -39,12 +39,18 @@ If you're using devstack, you can copy and modify the devstack configuration::
     source /opt/stack/devstack/openrc demo demo
     iniset functional_creds.conf auth password $OS_PASSWORD
 
+Set the DNS name server to be used by your cluster nodes (e.g. 8.8.8.8)::
+
+    # update DNS name server
+    source /opt/stack/devstack/openrc demo demo
+    iniset functional_creds.conf magnum dns_nameserver <dns-svr-ip-address>
+
 Create the necessary keypair and flavor::
 
     source /opt/stack/devstack/openrc admin admin
     nova keypair-add --pub-key ~/.ssh/id_rsa.pub default
-    nova flavor-create  m1.magnum 100 1024 8 1
-    nova flavor-create  s1.magnum 200 512 8 1
+    nova flavor-create  m1.magnum 100 1024 10 1
+    nova flavor-create  s1.magnum 200 512 10 1
 
     source /opt/stack/devstack/openrc demo demo
     nova keypair-add --pub-key ~/.ssh/id_rsa.pub default
@@ -69,7 +75,7 @@ Here's a reasonable sample of tempest.conf settings you might need::
     test_accounts_file=/tmp/etc/magnum/accounts.yaml
     admin_username=admin
     admin_password=password
-    admin_tenant_name=admin
+    admin_project_name=admin
 
     [identity]
     disable_ssl_certificate_validation=True
@@ -113,7 +119,7 @@ All the environments are detailed in Magnum's tox.ini::
     cat tox.ini | grep functional- | awk -F: '{print $2}' | sed s/]//
 
 To run a particular subset of tests, specify that group as a tox environment.
-For example, here is how you would run all of the kubernates tests::
+For example, here is how you would run all of the kubernetes tests::
 
     tox -e functional-k8s
 

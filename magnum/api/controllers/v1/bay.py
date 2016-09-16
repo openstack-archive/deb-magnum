@@ -13,9 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import uuid
+
+from oslo_log import log as logging
 from oslo_utils import timeutils
 import pecan
-from pecan import rest
 import wsme
 from wsme import types as wtypes
 
@@ -27,26 +29,22 @@ from magnum.api.controllers.v1 import types
 from magnum.api import expose
 from magnum.api import utils as api_utils
 from magnum.api.validation import validate_bay_properties
+from magnum.common import clients
 from magnum.common import exception
+from magnum.common import name_generator
 from magnum.common import policy
+from magnum.i18n import _LW
 from magnum import objects
 from magnum.objects import fields
 
+LOG = logging.getLogger(__name__)
 
-class BayPatchType(types.JsonPatchType):
 
-    @staticmethod
-    def mandatory_attrs():
-        return ['/baymodel_id']
+class BayID(wtypes.Base):
+    uuid = types.uuid
 
-    @staticmethod
-    def internal_attrs():
-        internal_attrs = ['/api_address', '/node_addresses',
-                          '/master_addresses', '/stack_id',
-                          '/ca_cert_ref', '/magnum_cert_ref',
-                          '/trust_id', '/trustee_user_name',
-                          '/trustee_password', '/trustee_user_id']
-        return types.JsonPatchType.internal_attrs() + internal_attrs
+    def __init__(self, uuid):
+        self.uuid = uuid
 
 
 class Bay(base.APIBase):
@@ -66,19 +64,21 @@ class Bay(base.APIBase):
             try:
                 baymodel = api_utils.get_resource('BayModel', value)
                 self._baymodel_id = baymodel.uuid
-            except exception.BayModelNotFound as e:
+            except exception.ClusterTemplateNotFound as e:
                 # Change error code because 404 (NotFound) is inappropriate
                 # response for a POST request to create a Bay
                 e.code = 400  # BadRequest
-                raise e
+                raise
         elif value == wtypes.Unset:
             self._baymodel_id = wtypes.Unset
 
     uuid = types.uuid
     """Unique UUID for this bay"""
 
-    name = wtypes.StringType(min_length=1, max_length=255)
-    """Name of this bay"""
+    name = wtypes.StringType(min_length=1, max_length=242,
+                             pattern='^[a-zA-Z][a-zA-Z0-9_.-]*$')
+    """Name of this bay, max length is limited to 242 because of heat stack
+    requires max length limit to 255, and Magnum amend a uuid length"""
 
     baymodel_id = wsme.wsproperty(wtypes.text, _get_baymodel_id,
                                   _set_baymodel_id, mandatory=True)
@@ -90,8 +90,8 @@ class Bay(base.APIBase):
     master_count = wsme.wsattr(wtypes.IntegerType(minimum=1), default=1)
     """The number of master nodes for this bay. Default to 1 if not set"""
 
-    bay_create_timeout = wsme.wsattr(wtypes.IntegerType(minimum=0), default=0)
-    """Timeout for creating the bay in minutes. Default to 0 if not set"""
+    bay_create_timeout = wsme.wsattr(wtypes.IntegerType(minimum=0), default=60)
+    """Timeout for creating the bay in minutes. Default to 60 if not set"""
 
     links = wsme.wsattr([link.Link], readonly=True)
     """A list containing a self link and associated bay links"""
@@ -111,11 +111,21 @@ class Bay(base.APIBase):
     api_address = wsme.wsattr(wtypes.text, readonly=True)
     """Api address of cluster master node"""
 
+    coe_version = wsme.wsattr(wtypes.text, readonly=True)
+    """Version of the COE software currently running in this cluster.
+    Example: swarm version or kubernetes version."""
+
+    container_version = wsme.wsattr(wtypes.text, readonly=True)
+    """Version of the container software. Example: docker version."""
+
     node_addresses = wsme.wsattr([wtypes.text], readonly=True)
     """IP addresses of cluster slave nodes"""
 
     master_addresses = wsme.wsattr([wtypes.text], readonly=True)
     """IP addresses of cluster master nodes"""
+
+    bay_faults = wsme.wsattr(wtypes.DictType(str, wtypes.text))
+    """Fault info collected from the heat resources of this bay"""
 
     def __init__(self, **kwargs):
         super(Bay, self).__init__()
@@ -162,8 +172,23 @@ class Bay(base.APIBase):
                      api_address='172.24.4.3',
                      node_addresses=['172.24.4.4', '172.24.4.5'],
                      created_at=timeutils.utcnow(),
-                     updated_at=timeutils.utcnow())
+                     updated_at=timeutils.utcnow(),
+                     coe_version=None,
+                     container_version=None)
         return cls._convert_with_links(sample, 'http://localhost:9511', expand)
+
+
+class BayPatchType(types.JsonPatchType):
+    _api_base = Bay
+
+    @staticmethod
+    def internal_attrs():
+        internal_attrs = ['/api_address', '/node_addresses',
+                          '/master_addresses', '/stack_id',
+                          '/ca_cert_ref', '/magnum_cert_ref',
+                          '/trust_id', '/trustee_user_name',
+                          '/trustee_password', '/trustee_user_id']
+        return types.JsonPatchType.internal_attrs() + internal_attrs
 
 
 class BayCollection(collection.Collection):
@@ -190,7 +215,7 @@ class BayCollection(collection.Collection):
         return sample
 
 
-class BaysController(rest.RestController):
+class BaysController(base.Controller):
     """REST controller for Bays."""
     def __init__(self):
         super(BaysController, self).__init__()
@@ -198,6 +223,12 @@ class BaysController(rest.RestController):
     _custom_actions = {
         'detail': ['GET'],
     }
+
+    def _generate_name_for_bay(self, context):
+        '''Generate a random name like: zeta-22-bay.'''
+        name_gen = name_generator.NameGenerator()
+        name = name_gen.generate()
+        return name + '-bay'
 
     def _get_bays_collection(self, marker, limit,
                              sort_key, sort_dir, expand=False,
@@ -264,6 +295,27 @@ class BaysController(rest.RestController):
                                          sort_key, sort_dir, expand,
                                          resource_url)
 
+    def _collect_fault_info(self, context, bay):
+        """Collect fault info from heat resources of given bay
+
+        and store them into bay.bay_faults.
+        """
+        osc = clients.OpenStackClients(context)
+        filters = {'status': 'FAILED'}
+        try:
+            failed_resources = osc.heat().resources.list(
+                bay.stack_id, nested_depth=2, filters=filters)
+        except Exception as e:
+            failed_resources = []
+            LOG.warning(_LW("Failed to retrieve failed resources for "
+                            "bay %(bay)s from Heat stack %(stack)s "
+                            "due to error: %(e)s"),
+                        {'bay': bay.uuid, 'stack': bay.stack_id, 'e': e},
+                        exc_info=True)
+
+        return {res.resource_name: res.resource_status_reason
+                for res in failed_resources}
+
     @expose.expose(Bay, types.uuid_or_name)
     def get_one(self, bay_ident):
         """Retrieve information about the given bay.
@@ -275,26 +327,21 @@ class BaysController(rest.RestController):
         policy.enforce(context, 'bay:get', bay,
                        action='bay:get')
 
-        return Bay.convert_with_links(bay)
+        bay = Bay.convert_with_links(bay)
 
+        if bay.status in fields.BayStatus.STATUS_FAILED:
+            bay.bay_faults = self._collect_fault_info(context, bay)
+
+        return bay
+
+    @base.Controller.api_version("1.1", "1.1")
     @expose.expose(Bay, body=Bay, status_code=201)
     def post(self, bay):
         """Create a new bay.
 
         :param bay: a bay within the request body.
         """
-        context = pecan.request.context
-        policy.enforce(context, 'bay:create',
-                       action='bay:create')
-        baymodel = objects.BayModel.get_by_uuid(context, bay.baymodel_id)
-        attr_validator.validate_os_resources(context, baymodel.as_dict())
-        bay_dict = bay.as_dict()
-        bay_dict['project_id'] = context.project_id
-        bay_dict['user_id'] = context.user_id
-        if bay_dict.get('name') is None:
-            bay_dict['name'] = None
-
-        new_bay = objects.Bay(context, **bay_dict)
+        new_bay = self._post(bay)
         res_bay = pecan.request.rpcapi.bay_create(new_bay,
                                                   bay.bay_create_timeout)
 
@@ -302,6 +349,39 @@ class BaysController(rest.RestController):
         pecan.response.location = link.build_url('bays', res_bay.uuid)
         return Bay.convert_with_links(res_bay)
 
+    @base.Controller.api_version("1.2")  # noqa
+    @expose.expose(BayID, body=Bay, status_code=202)
+    def post(self, bay):
+        """Create a new bay.
+
+        :param bay: a bay within the request body.
+        """
+        new_bay = self._post(bay)
+        pecan.request.rpcapi.bay_create_async(new_bay, bay.bay_create_timeout)
+        return BayID(new_bay.uuid)
+
+    def _post(self, bay):
+        context = pecan.request.context
+        policy.enforce(context, 'bay:create',
+                       action='bay:create')
+        baymodel = objects.BayModel.get_by_uuid(context, bay.baymodel_id)
+        attr_validator.validate_os_resources(context, baymodel.as_dict())
+        attr_validator.validate_master_count(bay.as_dict(), baymodel.as_dict())
+        bay_dict = bay.as_dict()
+        bay_dict['project_id'] = context.project_id
+        bay_dict['user_id'] = context.user_id
+        # NOTE(yuywz): We will generate a random human-readable name for
+        # bay if the name is not spcified by user.
+        name = bay_dict.get('name') or self._generate_name_for_bay(context)
+        bay_dict['name'] = name
+        bay_dict['coe_version'] = None
+        bay_dict['container_version'] = None
+
+        new_bay = objects.Bay(context, **bay_dict)
+        new_bay.uuid = uuid.uuid4()
+        return new_bay
+
+    @base.Controller.api_version("1.1", "1.1")
     @wsme.validate(types.uuid, [BayPatchType])
     @expose.expose(Bay, types.uuid_or_name, body=[BayPatchType])
     def patch(self, bay_ident, patch):
@@ -310,6 +390,40 @@ class BaysController(rest.RestController):
         :param bay_ident: UUID or logical name of a bay.
         :param patch: a json PATCH document to apply to this bay.
         """
+        bay = self._patch(bay_ident, patch)
+        res_bay = pecan.request.rpcapi.bay_update(bay)
+        return Bay.convert_with_links(res_bay)
+
+    @base.Controller.api_version("1.2", "1.2")   # noqa
+    @wsme.validate(types.uuid, [BayPatchType])
+    @expose.expose(BayID, types.uuid_or_name, body=[BayPatchType],
+                   status_code=202)
+    def patch(self, bay_ident, patch):
+        """Update an existing bay.
+
+        :param bay_ident: UUID or logical name of a bay.
+        :param patch: a json PATCH document to apply to this bay.
+        """
+        bay = self._patch(bay_ident, patch)
+        pecan.request.rpcapi.bay_update_async(bay)
+        return BayID(bay.uuid)
+
+    @base.Controller.api_version("1.3")   # noqa
+    @wsme.validate(types.uuid, bool, [BayPatchType])
+    @expose.expose(BayID, types.uuid_or_name, bool, body=[BayPatchType],
+                   status_code=202)
+    def patch(self, bay_ident, rollback=False, patch=None):
+        """Update an existing bay.
+
+        :param bay_ident: UUID or logical name of a bay.
+        :param rollback: whether to rollback bay on update failure.
+        :param patch: a json PATCH document to apply to this bay.
+        """
+        bay = self._patch(bay_ident, patch)
+        pecan.request.rpcapi.bay_update_async(bay, rollback=rollback)
+        return BayID(bay.uuid)
+
+    def _patch(self, bay_ident, patch):
         context = pecan.request.context
         bay = api_utils.get_resource('Bay', bay_ident)
         policy.enforce(context, 'bay:update', bay,
@@ -335,19 +449,33 @@ class BaysController(rest.RestController):
         delta = bay.obj_what_changed()
 
         validate_bay_properties(delta)
+        return bay
 
-        res_bay = pecan.request.rpcapi.bay_update(bay)
-        return Bay.convert_with_links(res_bay)
-
+    @base.Controller.api_version("1.1", "1.1")
     @expose.expose(None, types.uuid_or_name, status_code=204)
     def delete(self, bay_ident):
         """Delete a bay.
 
         :param bay_ident: UUID of a bay or logical name of the bay.
         """
+        bay = self._delete(bay_ident)
+
+        pecan.request.rpcapi.bay_delete(bay.uuid)
+
+    @base.Controller.api_version("1.2")  # noqa
+    @expose.expose(None, types.uuid_or_name, status_code=204)
+    def delete(self, bay_ident):
+        """Delete a bay.
+
+        :param bay_ident: UUID of a bay or logical name of the bay.
+        """
+        bay = self._delete(bay_ident)
+
+        pecan.request.rpcapi.bay_delete_async(bay.uuid)
+
+    def _delete(self, bay_ident):
         context = pecan.request.context
         bay = api_utils.get_resource('Bay', bay_ident)
         policy.enforce(context, 'bay:delete', bay,
                        action='bay:delete')
-
-        pecan.request.rpcapi.bay_delete(bay.uuid)
+        return bay

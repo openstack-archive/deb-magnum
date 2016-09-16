@@ -34,112 +34,21 @@ class API(rpc_service.API):
         return self._call('bay_create', bay=bay,
                           bay_create_timeout=bay_create_timeout)
 
+    def bay_create_async(self, bay, bay_create_timeout):
+        self._cast('bay_create', bay=bay,
+                   bay_create_timeout=bay_create_timeout)
+
     def bay_delete(self, uuid):
         return self._call('bay_delete', uuid=uuid)
+
+    def bay_delete_async(self, uuid):
+        self._cast('bay_delete', uuid=uuid)
 
     def bay_update(self, bay):
         return self._call('bay_update', bay=bay)
 
-    # Service Operations
-
-    def service_create(self, service):
-        return self._call('service_create', service=service)
-
-    def service_update(self, service_ident, bay_ident, manifest):
-        return self._call('service_update', service_ident=service_ident,
-                          bay_ident=bay_ident, manifest=manifest)
-
-    def service_list(self, context, bay_ident):
-        return self._call('service_list', bay_ident=bay_ident)
-
-    def service_delete(self, service_ident, bay_ident):
-        return self._call('service_delete',
-                          service_ident=service_ident,
-                          bay_ident=bay_ident)
-
-    def service_show(self, context, service_ident, bay_ident):
-        return self._call('service_show', service_ident=service_ident,
-                          bay_ident=bay_ident)
-
-    # Pod Operations
-
-    def pod_create(self, pod):
-        return self._call('pod_create', pod=pod)
-
-    def pod_list(self, context, bay_ident):
-        return self._call('pod_list', bay_ident=bay_ident)
-
-    def pod_update(self, pod_ident, bay_ident, manifest):
-        return self._call('pod_update', pod_ident=pod_ident,
-                          bay_ident=bay_ident, manifest=manifest)
-
-    def pod_delete(self, pod_ident, bay_ident):
-        return self._call('pod_delete', pod_ident=pod_ident,
-                          bay_ident=bay_ident)
-
-    def pod_show(self, context, pod_ident, bay_ident):
-        return self._call('pod_show', pod_ident=pod_ident,
-                          bay_ident=bay_ident)
-
-    # ReplicationController Operations
-
-    def rc_create(self, rc):
-        return self._call('rc_create', rc=rc)
-
-    def rc_update(self, rc_ident, bay_ident, manifest):
-        return self._call('rc_update', rc_ident=rc_ident,
-                          bay_ident=bay_ident, manifest=manifest)
-
-    def rc_list(self, context, bay_ident):
-        return self._call('rc_list', bay_ident=bay_ident)
-
-    def rc_delete(self, rc_ident, bay_ident):
-        return self._call('rc_delete', rc_ident=rc_ident, bay_ident=bay_ident)
-
-    def rc_show(self, context, rc_ident, bay_ident):
-        return self._call('rc_show', rc_ident=rc_ident,
-                          bay_ident=bay_ident)
-
-    # Container operations
-
-    def container_create(self, container):
-        return self._call('container_create', container=container)
-
-    def container_delete(self, container_uuid):
-        return self._call('container_delete', container_uuid=container_uuid)
-
-    def container_show(self, container_uuid):
-        return self._call('container_show', container_uuid=container_uuid)
-
-    def container_reboot(self, container_uuid):
-        return self._call('container_reboot', container_uuid=container_uuid)
-
-    def container_stop(self, container_uuid):
-        return self._call('container_stop', container_uuid=container_uuid)
-
-    def container_start(self, container_uuid):
-        return self._call('container_start', container_uuid=container_uuid)
-
-    def container_pause(self, container_uuid):
-        return self._call('container_pause', container_uuid=container_uuid)
-
-    def container_unpause(self, container_uuid):
-        return self._call('container_unpause', container_uuid=container_uuid)
-
-    def container_logs(self, container_uuid):
-        return self._call('container_logs', container_uuid=container_uuid)
-
-    def container_exec(self, container_uuid, command):
-        return self._call('container_exec', container_uuid=container_uuid,
-                          command=command)
-
-    # X509KeyPair Operations
-
-    def x509keypair_create(self, x509keypair):
-        return self._call('x509keypair_create', x509keypair=x509keypair)
-
-    def x509keypair_delete(self, uuid):
-        return self._call('x509keypair_delete', uuid=uuid)
+    def bay_update_async(self, bay, rollback=False):
+        self._cast('bay_update', bay=bay, rollback=rollback)
 
     # CA operations
 

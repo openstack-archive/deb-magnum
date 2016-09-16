@@ -15,12 +15,14 @@
 
 import jsonpatch
 from oslo_config import cfg
+from oslo_utils import uuidutils
 import pecan
 import wsme
 
 from magnum.common import exception
 from magnum.common import utils
 from magnum.i18n import _
+from magnum.i18n import _LE
 from magnum import objects
 
 CONF = cfg.CONF
@@ -29,6 +31,9 @@ CONF = cfg.CONF
 JSONPATCH_EXCEPTIONS = (jsonpatch.JsonPatchException,
                         jsonpatch.JsonPointerException,
                         KeyError)
+
+
+DOCKER_MINIMUM_MEMORY = 4 * 1024 * 1024
 
 
 def validate_limit(limit):
@@ -47,6 +52,21 @@ def validate_sort_dir(sort_dir):
                                          "Acceptable values are "
                                          "'asc' or 'desc'") % sort_dir)
     return sort_dir
+
+
+def validate_docker_memory(mem_str):
+    """Docker require that Minimum memory limit >= 4M."""
+    try:
+        mem = utils.get_docker_quantity(mem_str)
+    except exception.UnsupportedDockerQuantityFormat:
+        raise wsme.exc.ClientSideError(_("Invalid docker memory specified. "
+                                         "Acceptable values are format: "
+                                         "<number>[<unit>],"
+                                         "where unit = b, k, m or g"))
+    if mem < DOCKER_MINIMUM_MEMORY:
+        raise wsme.exc.ClientSideError(_("Docker Minimum memory limit"
+                                         "allowed is %d B.")
+                                       % DOCKER_MINIMUM_MEMORY)
 
 
 def apply_jsonpatch(doc, patch):
@@ -74,7 +94,7 @@ def get_resource(resource, resource_ident):
     """
     resource = getattr(objects, resource)
 
-    if utils.is_uuid_like(resource_ident):
+    if uuidutils.is_uuid_like(resource_ident):
         return resource.get_by_uuid(pecan.request.context, resource_ident)
 
     return resource.get_by_name(pecan.request.context, resource_ident)
@@ -91,7 +111,7 @@ def get_openstack_resource(manager, resource_ident, resource_type):
     :raises: ResourceNotFound if the openstack resource is not exist.
              Conflict if multi openstack resources have same name.
     """
-    if utils.is_uuid_like(resource_ident):
+    if uuidutils.is_uuid_like(resource_ident):
         resource_data = manager.get(resource_ident)
     else:
         filters = {'name': resource_ident}
@@ -100,9 +120,10 @@ def get_openstack_resource(manager, resource_ident, resource_type):
             raise exception.ResourceNotFound(name=resource_type,
                                              id=resource_ident)
         if len(matches) > 1:
-            msg = ("Multiple '%s' exist with same name '%s'. "
-                   "Please use the resource id instead." %
-                   (resource_type, resource_ident))
+            msg = _LE("Multiple %(resource_type)s exist with same name "
+                      "%(resource_ident)s. Please use the resource id "
+                      "instead.") % {'resource_type': resource_type,
+                                     'resource_ident': resource_ident}
             raise exception.Conflict(msg)
         resource_data = matches[0]
     return resource_data

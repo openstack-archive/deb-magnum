@@ -71,7 +71,7 @@ class Connection(object):
                        ::
 
                         {
-                         'uuid': utils.generate_uuid(),
+                         'uuid': uuidutils.generate_uuid(),
                          'name': 'example',
                          'type': 'virt'
                         }
@@ -118,7 +118,7 @@ class Connection(object):
 
         :param bay_id: The id or uuid of a bay.
         :returns: A bay.
-        :raises: BayNotFound
+        :raises: ClusterNotFound
         """
 
     @abc.abstractmethod
@@ -154,7 +154,7 @@ class Connection(object):
                        ::
 
                         {
-                         'uuid': utils.generate_uuid(),
+                         'uuid': uuidutils.generate_uuid(),
                          'name': 'example',
                          'type': 'virt'
                         }
@@ -201,333 +201,7 @@ class Connection(object):
 
         :param baymodel_id: The id or uuid of a baymodel.
         :returns: A baymodel.
-        :raises: BayModelNotFound
-        """
-
-    @abc.abstractmethod
-    def get_container_list(self, context, filters=None,
-                           limit=None, marker=None, sort_key=None,
-                           sort_dir=None):
-        """Get matching containers.
-
-        Return a list of the specified columns for all containers that match
-        the specified filters.
-
-        :param context: The security context
-        :param filters: Filters to apply. Defaults to None.
-
-        :param limit: Maximum number of containers to return.
-        :param marker: the last item of the previous page; we return the next
-                       result set.
-        :param sort_key: Attribute by which results should be sorted.
-        :param sort_dir: direction in which results should be sorted.
-                         (asc, desc)
-        :returns: A list of tuples of the specified columns.
-        """
-
-    @abc.abstractmethod
-    def create_container(self, values):
-        """Create a new container.
-
-        :param values: A dict containing several items used to identify
-                       and track the container, and several dicts which are
-                       passed
-                       into the Drivers when managing this container. For
-                       example:
-
-                       ::
-
-                        {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'type': 'virt'
-                        }
-        :returns: A container.
-        """
-
-    @abc.abstractmethod
-    def get_container_by_id(self, context, container_id):
-        """Return a container.
-
-        :param context: The security context
-        :param container_id: The id of a container.
-        :returns: A container.
-        """
-
-    @abc.abstractmethod
-    def get_container_by_uuid(self, context, container_uuid):
-        """Return a container.
-
-        :param context: The security context
-        :param container_uuid: The uuid of a container.
-        :returns: A container.
-        """
-
-    @abc.abstractmethod
-    def get_container_by_name(self, context, container_name):
-        """Return a container.
-
-        :param context: The security context
-        :param container_name: The name of a container.
-        :returns: A container.
-        """
-
-    @abc.abstractmethod
-    def destroy_container(self, container_id):
-        """Destroy a container and all associated interfaces.
-
-        :param container_id: The id or uuid of a container.
-        """
-
-    @abc.abstractmethod
-    def update_container(self, container_id, values):
-        """Update properties of a container.
-
-        :param container_id: The id or uuid of a container.
-        :returns: A container.
-        :raises: ContainerNotFound
-        """
-
-    @abc.abstractmethod
-    def get_pod_list(self, context, filters=None, limit=None,
-                     marker=None, sort_key=None, sort_dir=None):
-        """Get matching pods.
-
-        Return a list of the specified columns for all pods that match the
-        specified filters.
-
-        :param context: The security context
-        :param filters: Filters to apply. Defaults to None.
-
-        :param limit: Maximum number of pods to return.
-        :param marker: the last item of the previous page; we return the next
-                       result set.
-        :param sort_key: Attribute by which results should be sorted.
-        :param sort_dir: direction in which results should be sorted.
-                         (asc, desc)
-        :returns: A list of tuples of the specified columns.
-        """
-
-    @abc.abstractmethod
-    def create_pod(self, values):
-        """Create a new pod.
-
-        :param values: A dict containing several items used to identify
-                       and track the pod, and several dicts which are passed
-                       into the Drivers when managing this pod. For example:
-
-                       ::
-
-                        {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'type': 'virt'
-                        }
-        :returns: A pod.
-        """
-
-    @abc.abstractmethod
-    def get_pod_by_id(self, context, pod_id):
-        """Return a pod.
-
-        :param context: The security context
-        :param pod_id: The id of a pod.
-        :returns: A pod.
-        """
-
-    @abc.abstractmethod
-    def get_pod_by_uuid(self, context, pod_uuid):
-        """Return a pod.
-
-        :param context: The security context
-        :param pod_uuid: The uuid of a pod.
-        :returns: A pod.
-        """
-
-    @abc.abstractmethod
-    def get_pod_by_name(self, pod_name):
-        """Return a pod.
-
-        :param pod_name: The name of a pod.
-        :returns: A pod.
-        """
-
-    @abc.abstractmethod
-    def destroy_pod(self, pod_id):
-        """Destroy a pod and all associated interfaces.
-
-        :param pod_id: The id or uuid of a pod.
-        """
-
-    @abc.abstractmethod
-    def update_pod(self, pod_id, values):
-        """Update properties of a pod.
-
-        :param pod_id: The id or uuid of a pod.
-        :returns: A pod.
-        :raises: PodNotFound
-        """
-
-    @abc.abstractmethod
-    def get_service_list(self, context, filters=None, limit=None,
-                         marker=None, sort_key=None, sort_dir=None):
-        """Get matching services.
-
-        Return a list of the specified columns for all services that match the
-        specified filters.
-
-        :param context: The security context
-        :param filters: Filters to apply. Defaults to None.
-
-        :param limit: Maximum number of services to return.
-        :param marker: the last item of the previous page; we return the next
-                       result set.
-        :param sort_key: Attribute by which results should be sorted.
-        :param sort_dir: direction in which results should be sorted.
-                         (asc, desc)
-        :returns: A list of tuples of the specified columns.
-        """
-
-    @abc.abstractmethod
-    def create_service(self, values):
-        """Create a new service.
-
-        :param values: A dict containing several items used to identify
-                       and track the service, and several dicts which are
-                       passed into the Drivers when managing this service.
-                       For example:
-
-                       ::
-
-                        {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'type': 'virt'
-                        }
-        :returns: A service.
-        """
-
-    @abc.abstractmethod
-    def get_service_by_id(self, context, service_id):
-        """Return a service.
-
-        :param context: The security context
-        :param service_id: The id of a service.
-        :returns: A service.
-        """
-
-    @abc.abstractmethod
-    def get_service_by_uuid(self, context, service_uuid):
-        """Return a service.
-
-        :param context: The security context
-        :param service_uuid: The uuid of a service.
-        :returns: A service.
-        """
-
-    @abc.abstractmethod
-    def get_service_by_name(self, context, service_name):
-        """Return a service.
-
-        :param context: The security context
-        :param service_name: The name of a service
-        :returns: A service.
-        """
-
-    @abc.abstractmethod
-    def destroy_service(self, service_id):
-        """Destroy a service and all associated interfaces.
-
-        :param service_id: The id or uuid of a service.
-        """
-
-    @abc.abstractmethod
-    def update_service(self, service_id, values):
-        """Update properties of a service.
-
-        :param service_id: The id or uuid of a service.
-        :returns: A service.
-        :raises: ServiceNotFound
-        """
-
-    @abc.abstractmethod
-    def get_rc_list(self, context, filters=None, limit=None,
-                    marker=None, sort_key=None, sort_dir=None):
-        """Get matching ReplicationControllers.
-
-        Return a list of the specified columns for all rcs that match the
-        specified filters.
-
-        :param context: The security context
-        :param filters: Filters to apply. Defaults to None.
-
-        :param limit: Maximum number of pods to return.
-        :param marker: the last item of the previous page; we return the next
-                       result set.
-        :param sort_key: Attribute by which results should be sorted.
-        :param sort_dir: direction in which results should be sorted.
-                         (asc, desc)
-        :returns: A list of tuples of the specified columns.
-        """
-
-    @abc.abstractmethod
-    def create_rc(self, values):
-        """Create a new ReplicationController.
-
-        :param values: A dict containing several items used to identify
-                       and track the rc, and several dicts which are passed
-                       into the Drivers when managing this pod. For example:
-
-                       ::
-
-                        {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'images': '["myimage"]'
-                        }
-        :returns: A ReplicationController.
-        """
-
-    @abc.abstractmethod
-    def get_rc_by_id(self, context, rc_id):
-        """Return a ReplicationController.
-
-        :param context: The security context
-        :param rc_id: The id of a rc.
-        :returns: A ReplicationController.
-        """
-
-    @abc.abstractmethod
-    def get_rc_by_uuid(self, context, rc_uuid):
-        """Return a ReplicationController.
-
-        :param context: The security context
-        :param rc_uuid: The uuid of a ReplicationController.
-        :returns: A ReplicationController.
-        """
-
-    @abc.abstractmethod
-    def get_rc_by_name(self, context, rc_name):
-        """Return a ReplicationController.
-
-        :param context: The security context
-        :param rc_name: The name of a ReplicationController.
-        :returns: A ReplicationController.
-        """
-
-    @abc.abstractmethod
-    def destroy_rc(self, rc_id):
-        """Destroy a ReplicationController and all associated interfaces.
-
-        :param rc_id: The id or uuid of a ReplicationController.
-        """
-
-    @abc.abstractmethod
-    def update_rc(self, rc_id, values):
-        """Update properties of a ReplicationController.
-
-        :param rc_id: The id or uuid of a ReplicationController.
-        :returns: A ReplicationController.
+        :raises: ClusterTemplateNotFound
         """
 
     @abc.abstractmethod
@@ -542,11 +216,11 @@ class Connection(object):
                        ::
 
                         {
-                         'uuid': utils.generate_uuid(),
-                         'name': 'example',
-                         'ca_cert': 'AAA...',
-                         'certificate': 'BBB...',
-                         'private_key': 'CCC...',
+                         'uuid': uuidutils.generate_uuid(),
+                         'certificate': 'AAA...',
+                         'private_key': 'BBB...',
+                         'private_key_passphrase': 'CCC...',
+                         'intermediates': 'DDD...',
                         }
         :returns: A X509KeyPair.
         """
@@ -566,15 +240,6 @@ class Connection(object):
 
         :param context: The security context
         :param x509keypair_uuid: The uuid of a x509keypair.
-        :returns: A x509keypair.
-        """
-
-    @abc.abstractmethod
-    def get_x509keypair_by_name(self, context, x509keypair_name):
-        """Return a x509keypair.
-
-        :param context: The security context
-        :param x509keypair_name: The name of a x509keypair.
         :returns: A x509keypair.
         """
 
@@ -611,13 +276,6 @@ class Connection(object):
         :param sort_dir: direction in which results should be sorted.
                          (asc, desc)
         :returns: A list of tuples of the specified columns.
-        """
-
-    def get_x509keypair_by_bay_uuid(self, bay_uuid):
-        """Returns the cert for a given bay.
-
-        :param bay_uuid: The uuid of a bay.
-        :returns: A cert.
         """
 
     @abc.abstractmethod
@@ -682,7 +340,7 @@ class Connection(object):
                        ::
 
                         {
-                         'id': utils.generate_uuid(),
+                         'id': uuidutils.generate_uuid(),
                          'project_id': 'fake_project',
                          'resource': 'fake_resource',
                          'hard_limit': 'fake_hardlimit',
