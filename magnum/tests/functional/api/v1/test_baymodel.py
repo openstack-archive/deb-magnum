@@ -11,15 +11,15 @@
 # under the License.
 
 
-from tempest_lib.common.utils import data_utils
-from tempest_lib import exceptions
+from tempest.lib.common.utils import data_utils
+from tempest.lib import exceptions
 import testtools
 
-from magnum.tests.functional.common import base
+from magnum.tests.functional.api import base
 from magnum.tests.functional.common import datagen
 
 
-class BayModelTest(base.BaseMagnumTest):
+class BayModelTest(base.BaseTempestTest):
 
     """Tests for baymodel CRUD."""
 
@@ -73,11 +73,36 @@ class BayModelTest(base.BaseMagnumTest):
         resp, model = self._create_baymodel(gen_model)
 
     @testtools.testcase.attr('positive')
+    def test_create_get_public_baymodel(self):
+        gen_model = datagen.valid_swarm_baymodel(is_public=True)
+        resp, model = self._create_baymodel(gen_model)
+
+        resp, model = self.baymodel_client.get_baymodel(model.uuid)
+        self.assertEqual(200, resp.status)
+        self.assertTrue(model.public)
+
+    @testtools.testcase.attr('positive')
+    def test_update_baymodel_public_by_uuid(self):
+        path = "/public"
+        gen_model = datagen.baymodel_data_with_valid_keypair_image_flavor()
+        resp, old_model = self._create_baymodel(gen_model)
+
+        patch_model = datagen.baymodel_replace_patch_data(path, value=True)
+        resp, new_model = self.baymodel_client.patch_baymodel(
+            old_model.uuid, patch_model)
+        self.assertEqual(200, resp.status)
+
+        resp, model = self.baymodel_client.get_baymodel(new_model.uuid)
+        self.assertEqual(200, resp.status)
+        self.assertTrue(model.public)
+
+    @testtools.testcase.attr('positive')
     def test_update_baymodel_by_uuid(self):
         gen_model = datagen.baymodel_data_with_valid_keypair_image_flavor()
         resp, old_model = self._create_baymodel(gen_model)
 
-        patch_model = datagen.baymodel_name_patch_data()
+        path = "/name"
+        patch_model = datagen.baymodel_replace_patch_data(path)
         resp, new_model = self.baymodel_client.patch_baymodel(
             old_model.uuid, patch_model)
         self.assertEqual(200, resp.status)
@@ -111,7 +136,8 @@ class BayModelTest(base.BaseMagnumTest):
 
     @testtools.testcase.attr('negative')
     def test_update_baymodel_404(self):
-        patch_model = datagen.baymodel_name_patch_data()
+        path = "/name"
+        patch_model = datagen.baymodel_replace_patch_data(path)
 
         self.assertRaises(
             exceptions.NotFound,
@@ -132,7 +158,8 @@ class BayModelTest(base.BaseMagnumTest):
 
     @testtools.testcase.attr('negative')
     def test_update_baymodel_name_not_found(self):
-        patch_model = datagen.baymodel_name_patch_data()
+        path = "/name"
+        patch_model = datagen.baymodel_replace_patch_data(path)
 
         self.assertRaises(
             exceptions.NotFound,
@@ -146,14 +173,21 @@ class BayModelTest(base.BaseMagnumTest):
 
     @testtools.testcase.attr('negative')
     def test_create_baymodel_missing_image(self):
-        gen_model = datagen.baymodel_data_with_valid_keypair()
+        gen_model = datagen.baymodel_data_with_missing_image()
+        self.assertRaises(
+            exceptions.BadRequest,
+            self.baymodel_client.post_baymodel, gen_model)
+
+    @testtools.testcase.attr('negative')
+    def test_create_baymodel_missing_flavor(self):
+        gen_model = datagen.baymodel_data_with_missing_flavor()
         self.assertRaises(
             exceptions.BadRequest,
             self.baymodel_client.post_baymodel, gen_model)
 
     @testtools.testcase.attr('negative')
     def test_create_baymodel_missing_keypair(self):
-        gen_model = datagen.baymodel_data_with_valid_image_and_flavor()
+        gen_model = datagen.baymodel_data_with_missing_keypair()
         self.assertRaises(
             exceptions.NotFound,
             self.baymodel_client.post_baymodel, gen_model)

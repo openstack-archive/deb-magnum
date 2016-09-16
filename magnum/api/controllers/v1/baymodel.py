@@ -14,7 +14,6 @@
 
 from oslo_utils import timeutils
 import pecan
-from pecan import rest
 import wsme
 from wsme import types as wtypes
 
@@ -28,18 +27,10 @@ from magnum.api import utils as api_utils
 from magnum.api import validation
 from magnum.common import clients
 from magnum.common import exception
+from magnum.common import name_generator
 from magnum.common import policy
 from magnum import objects
 from magnum.objects import fields
-
-
-class BayModelPatchType(types.JsonPatchType):
-
-    @staticmethod
-    def mandatory_attrs():
-        return ['/image_id', '/keypair_id', '/external_network_id', '/coe',
-                '/tls_disabled', '/public', '/registry_enabled',
-                '/server_type', '/cluster_distro', '/network_driver']
 
 
 class BayModel(base.APIBase):
@@ -55,7 +46,7 @@ class BayModel(base.APIBase):
     name = wtypes.StringType(min_length=1, max_length=255)
     """The name of the bay model"""
 
-    coe = wtypes.Enum(str, *fields.BayType.ALL, mondatory=True)
+    coe = wtypes.Enum(str, *fields.BayType.ALL, mandatory=True)
     """The Container Orchestration Engine for this bay model"""
 
     image_id = wsme.wsattr(wtypes.StringType(min_length=1, max_length=255),
@@ -80,6 +71,9 @@ class BayModel(base.APIBase):
 
     fixed_network = wtypes.StringType(min_length=1, max_length=255)
     """The fixed network name to attach the Bay"""
+
+    fixed_subnet = wtypes.StringType(min_length=1, max_length=255)
+    """The fixed subnet name to attach the Bay"""
 
     network_driver = wtypes.StringType(min_length=1, max_length=255)
     """The name of the driver used for instantiating container networks"""
@@ -131,6 +125,20 @@ class BayModel(base.APIBase):
                               default='vm')
     """Server type for this bay model """
 
+    insecure_registry = wtypes.StringType(min_length=1, max_length=255)
+    """insecure registry url when create baymodel """
+
+    docker_storage_driver = wtypes.Enum(str, *fields.DockerStorageDriver.ALL)
+    """Docker storage driver"""
+
+    master_lb_enabled = wsme.wsattr(types.boolean, default=False)
+    """Indicates whether created bays should have a load balancer for master
+       nodes or not.
+       """
+
+    floating_ip_enabled = wsme.wsattr(types.boolean, default=True)
+    """Indicates whether created bays should have a floating ip or not."""
+
     def __init__(self, **kwargs):
         self.fields = []
         for field in objects.BayModel.fields:
@@ -141,11 +149,7 @@ class BayModel(base.APIBase):
             setattr(self, field, kwargs.get(field, wtypes.Unset))
 
     @staticmethod
-    def _convert_with_links(baymodel, url, expand=True):
-        if not expand:
-            baymodel.unset_fields_except(['uuid', 'name', 'image_id',
-                                          'apiserver_port', 'coe'])
-
+    def _convert_with_links(baymodel, url):
         baymodel.links = [link.Link.make_link('self', url,
                                               'baymodels', baymodel.uuid),
                           link.Link.make_link('bookmark', url,
@@ -154,13 +158,12 @@ class BayModel(base.APIBase):
         return baymodel
 
     @classmethod
-    def convert_with_links(cls, rpc_baymodel, expand=True):
+    def convert_with_links(cls, rpc_baymodel):
         baymodel = BayModel(**rpc_baymodel.as_dict())
-        return cls._convert_with_links(baymodel, pecan.request.host_url,
-                                       expand)
+        return cls._convert_with_links(baymodel, pecan.request.host_url)
 
     @classmethod
-    def sample(cls, expand=True):
+    def sample(cls):
         sample = cls(
             uuid='27e3153e-d5bf-4b7e-b517-fb518e17f34c',
             name='example',
@@ -171,10 +174,12 @@ class BayModel(base.APIBase):
             keypair_id='keypair1',
             external_network_id='ffc44e4a-2319-4062-bce0-9ae1c38b05ba',
             fixed_network='private',
+            fixed_subnet='private-subnet',
             network_driver='libnetwork',
             volume_driver='cinder',
             apiserver_port=8080,
             docker_volume_size=25,
+            docker_storage_driver='devicemapper',
             cluster_distro='fedora-atomic',
             coe=fields.BayType.KUBERNETES,
             http_proxy='http://proxy.com:123',
@@ -182,10 +187,22 @@ class BayModel(base.APIBase):
             no_proxy='192.168.0.1,192.168.0.2,192.168.0.3',
             labels={'key1': 'val1', 'key2': 'val2'},
             server_type='vm',
+            insecure_registry='10.238.100.100:5000',
             created_at=timeutils.utcnow(),
             updated_at=timeutils.utcnow(),
-            public=False),
-        return cls._convert_with_links(sample, 'http://localhost:9511', expand)
+            public=False,
+            master_lb_enabled=False,
+            floating_ip_enabled=True,
+        )
+        return cls._convert_with_links(sample, 'http://localhost:9511')
+
+
+class BayModelPatchType(types.JsonPatchType):
+    _api_base = BayModel
+    _extra_non_removable_attrs = {'/network_driver', '/external_network_id',
+                                  '/tls_disabled', '/public', '/server_type',
+                                  '/coe', '/registry_enabled',
+                                  '/cluster_distro'}
 
 
 class BayModelCollection(collection.Collection):
@@ -198,10 +215,9 @@ class BayModelCollection(collection.Collection):
         self._type = 'baymodels'
 
     @staticmethod
-    def convert_with_links(rpc_baymodels, limit, url=None, expand=False,
-                           **kwargs):
+    def convert_with_links(rpc_baymodels, limit, url=None, **kwargs):
         collection = BayModelCollection()
-        collection.baymodels = [BayModel.convert_with_links(p, expand)
+        collection.baymodels = [BayModel.convert_with_links(p)
                                 for p in rpc_baymodels]
         collection.next = collection.get_next(limit, url=url, **kwargs)
         return collection
@@ -209,20 +225,26 @@ class BayModelCollection(collection.Collection):
     @classmethod
     def sample(cls):
         sample = cls()
-        sample.baymodels = [BayModel.sample(expand=False)]
+        sample.baymodels = [BayModel.sample()]
         return sample
 
 
-class BayModelsController(rest.RestController):
+class BayModelsController(base.Controller):
     """REST controller for BayModels."""
 
     _custom_actions = {
         'detail': ['GET'],
     }
 
+    def _generate_name_for_baymodel(self, context):
+        '''Generate a random name like: zeta-22-model.'''
+
+        name_gen = name_generator.NameGenerator()
+        name = name_gen.generate()
+        return name + '-model'
+
     def _get_baymodels_collection(self, marker, limit,
-                                  sort_key, sort_dir, expand=False,
-                                  resource_url=None):
+                                  sort_key, sort_dir, resource_url=None):
 
         limit = api_utils.validate_limit(limit)
         sort_dir = api_utils.validate_sort_dir(sort_dir)
@@ -238,7 +260,6 @@ class BayModelsController(rest.RestController):
 
         return BayModelCollection.convert_with_links(baymodels, limit,
                                                      url=resource_url,
-                                                     expand=expand,
                                                      sort_key=sort_key,
                                                      sort_dir=sort_dir)
 
@@ -279,11 +300,9 @@ class BayModelsController(rest.RestController):
         if parent != "baymodels":
             raise exception.HTTPNotFound
 
-        expand = True
         resource_url = '/'.join(['baymodels', 'detail'])
         return self._get_baymodels_collection(marker, limit,
-                                              sort_key, sort_dir, expand,
-                                              resource_url)
+                                              sort_key, sort_dir, resource_url)
 
     @expose.expose(BayModel, types.uuid_or_name)
     def get_one(self, baymodel_ident):
@@ -293,14 +312,16 @@ class BayModelsController(rest.RestController):
         """
         context = pecan.request.context
         baymodel = api_utils.get_resource('BayModel', baymodel_ident)
-        policy.enforce(context, 'baymodel:get', baymodel,
-                       action='baymodel:get')
+        if not baymodel.public:
+            policy.enforce(context, 'baymodel:get', baymodel,
+                           action='baymodel:get')
 
         return BayModel.convert_with_links(baymodel)
 
     @expose.expose(BayModel, body=BayModel, status_code=201)
     @validation.enforce_network_driver_types_create()
     @validation.enforce_volume_driver_types_create()
+    @validation.enforce_volume_storage_size_create()
     def post(self, baymodel):
         """Create a new baymodel.
 
@@ -310,7 +331,6 @@ class BayModelsController(rest.RestController):
         policy.enforce(context, 'baymodel:create',
                        action='baymodel:create')
         baymodel_dict = baymodel.as_dict()
-        context = pecan.request.context
         cli = clients.OpenStackClients(context)
         attr_validator.validate_os_resources(context, baymodel_dict)
         image_data = attr_validator.validate_image(cli,
@@ -322,7 +342,13 @@ class BayModelsController(rest.RestController):
         if baymodel_dict['public']:
             if not policy.enforce(context, "baymodel:publish", None,
                                   do_raise=False):
-                raise exception.BaymodelPublishDenied()
+                raise exception.ClusterTemplatePublishDenied()
+
+        # NOTE(yuywz): We will generate a random human-readable name for
+        # baymodel if the name is not spcified by user.
+        arg_name = baymodel_dict.get('name')
+        name = arg_name or self._generate_name_for_baymodel(context)
+        baymodel_dict['name'] = name
 
         new_baymodel = objects.BayModel(context, **baymodel_dict)
         new_baymodel.create()
@@ -359,7 +385,7 @@ class BayModelsController(rest.RestController):
         if baymodel.public != new_baymodel.public:
             if not policy.enforce(context, "baymodel:publish", None,
                                   do_raise=False):
-                raise exception.BaymodelPublishDenied()
+                raise exception.ClusterTemplatePublishDenied()
 
         # Update only the fields that have changed
         for field in objects.BayModel.fields:

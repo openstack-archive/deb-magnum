@@ -15,19 +15,20 @@
 # under the License.
 
 import six
-import uuid
 
 from heatclient import exc
 import mock
 from mock import patch
 from oslo_config import cfg
 from oslo_service import loopingcall
+from pycadf import cadftaxonomy as taxonomy
 
 from magnum.common import exception
 from magnum.conductor.handlers import bay_conductor
 from magnum import objects
 from magnum.objects.fields import BayStatus as bay_status
 from magnum.tests import base
+from magnum.tests import fake_notifier
 from magnum.tests.unit.db import base as db_base
 from magnum.tests.unit.db import utils
 
@@ -43,23 +44,6 @@ class TestHandler(db_base.DbTestCase):
         bay_dict = utils.get_test_bay(node_count=1)
         self.bay = objects.Bay(self.context, **bay_dict)
         self.bay.create()
-
-        self.p = patch(
-            'magnum.conductor.handlers.bay_conductor.Handler.'
-            '_create_trustee_and_trust')
-
-        def create_trustee_and_trust(osc, bay):
-            bay.trust_id = 'trust_id'
-            bay.trustee_username = 'user_name'
-            bay.trustee_user_id = 'user_id'
-            bay.trustee_password = 'password'
-
-        self.p.side_effect = create_trustee_and_trust
-        self.p.start()
-
-    def tearDown(self):
-        self.p.stop()
-        super(TestHandler, self).tearDown()
 
     @patch('magnum.conductor.scale_manager.ScaleManager')
     @patch('magnum.conductor.handlers.bay_conductor.Handler._poll_and_check')
@@ -83,9 +67,16 @@ class TestHandler(db_base.DbTestCase):
         self.bay.node_count = 2
         self.handler.bay_update(self.context, self.bay)
 
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.update', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+
         mock_update_stack.assert_called_once_with(
             self.context, mock_openstack_client, self.bay,
-            mock_scale_manager.return_value)
+            mock_scale_manager.return_value, False)
         bay = objects.Bay.get(self.context, self.bay.uuid)
         self.assertEqual(2, bay.node_count)
 
@@ -109,6 +100,13 @@ class TestHandler(db_base.DbTestCase):
         self.bay.node_count = 2
         self.assertRaises(exception.NotSupported, self.handler.bay_update,
                           self.context, self.bay)
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.update', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[0].payload['outcome'])
 
         bay = objects.Bay.get(self.context, self.bay.uuid)
         self.assertEqual(1, bay.node_count)
@@ -135,9 +133,16 @@ class TestHandler(db_base.DbTestCase):
         self.bay.node_count = 2
         self.handler.bay_update(self.context, self.bay)
 
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.update', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+
         mock_update_stack.assert_called_once_with(
             self.context, mock_openstack_client, self.bay,
-            mock_scale_manager.return_value)
+            mock_scale_manager.return_value, False)
         bay = objects.Bay.get(self.context, self.bay.uuid)
         self.assertEqual(2, bay.node_count)
 
@@ -163,23 +168,21 @@ class TestHandler(db_base.DbTestCase):
         self._test_update_bay_status_complete(bay_status.ADOPT_COMPLETE)
 
     @patch('magnum.conductor.handlers.bay_conductor.HeatPoller')
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
     @patch('magnum.conductor.handlers.bay_conductor._create_stack')
-    @patch('magnum.conductor.handlers.bay_conductor.uuid')
     @patch('magnum.common.clients.OpenStackClients')
-    def test_create(self, mock_openstack_client_class, mock_uuid,
-                    mock_create_stack, mock_cert_manager,
+    def test_create(self, mock_openstack_client_class,
+                    mock_create_stack, mock_cert_manager, mock_trust_manager,
                     mock_heat_poller_class):
         timeout = 15
-        test_uuid = uuid.uuid4()
-        mock_uuid.uuid4.return_value = test_uuid
         mock_poller = mock.MagicMock()
         mock_poller.poll_and_check.return_value = loopingcall.LoopingCallDone()
         mock_heat_poller_class.return_value = mock_poller
-        mock_openstack_client_class.return_value = mock.sentinel.osc
+        osc = mock.sentinel.osc
+        mock_openstack_client_class.return_value = osc
 
         def create_stack_side_effect(context, osc, bay, timeout):
-            self.assertEqual(str(test_uuid), bay.uuid)
             return {'stack': {'id': 'stack-id'}}
 
         mock_create_stack.side_effect = create_stack_side_effect
@@ -197,58 +200,289 @@ class TestHandler(db_base.DbTestCase):
         bay = self.handler.bay_create(self.context,
                                       self.bay, timeout)
 
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+
         mock_create_stack.assert_called_once_with(self.context,
                                                   mock.sentinel.osc,
                                                   self.bay, timeout)
         mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
-            self.bay)
+            self.bay, context=self.context)
         self.assertEqual(bay_status.CREATE_IN_PROGRESS, bay.status)
+        mock_trust_manager.create_trustee_and_trust.assert_called_once_with(
+            osc, self.bay)
 
+    def _test_create_failed(self,
+                            mock_openstack_client_class,
+                            mock_cert_manager,
+                            mock_trust_manager,
+                            expected_exception,
+                            is_create_cert_called=True,
+                            is_create_trust_called=True):
+        osc = mock.MagicMock()
+        mock_openstack_client_class.return_value = osc
+        timeout = 15
+
+        self.assertRaises(
+            expected_exception,
+            self.handler.bay_create,
+            self.context,
+            self.bay, timeout
+        )
+
+        gctb = mock_cert_manager.generate_certificates_to_bay
+        if is_create_cert_called:
+            gctb.assert_called_once_with(self.bay, context=self.context)
+        else:
+            gctb.assert_not_called()
+        ctat = mock_trust_manager.create_trustee_and_trust
+        if is_create_trust_called:
+            ctat.assert_called_once_with(osc, self.bay)
+        else:
+            ctat.assert_not_called()
+
+        mock_cert_manager.delete_certificates_from_bay(self.bay)
+        mock_trust_manager.delete_trustee_and_trust.assert_called_once_with(
+            osc, self.context, self.bay)
+
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
     @patch('magnum.conductor.handlers.bay_conductor._create_stack')
     @patch('magnum.common.clients.OpenStackClients')
     def test_create_handles_bad_request(self, mock_openstack_client_class,
                                         mock_create_stack,
-                                        mock_cert_manager):
+                                        mock_cert_manager,
+                                        mock_trust_manager):
         mock_create_stack.side_effect = exc.HTTPBadRequest
-        timeout = 15
-        self.assertRaises(exception.InvalidParameterValue,
-                          self.handler.bay_create, self.context,
-                          self.bay, timeout)
-        mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
-            self.bay)
-        mock_cert_manager.delete_certificates_from_bay(self.bay)
 
+        self._test_create_failed(
+            mock_openstack_client_class,
+            mock_cert_manager,
+            mock_trust_manager,
+            exception.InvalidParameterValue
+        )
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(2, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.create', notifications[1].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[1].payload['outcome'])
+
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.common.clients.OpenStackClients')
+    def test_create_with_cert_failed(self, mock_openstack_client_class,
+                                     mock_cert_manager,
+                                     mock_trust_manager):
+        e = exception.CertificatesToBayFailed(bay_uuid='uuid')
+        mock_cert_manager.generate_certificates_to_bay.side_effect = e
+
+        self._test_create_failed(
+            mock_openstack_client_class,
+            mock_cert_manager,
+            mock_trust_manager,
+            exception.CertificatesToBayFailed
+        )
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[0].payload['outcome'])
+
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
     @patch('magnum.conductor.handlers.bay_conductor._create_stack')
-    @patch('magnum.conductor.handlers.bay_conductor.uuid')
+    @patch('magnum.common.clients.OpenStackClients')
+    def test_create_with_trust_failed(self, mock_openstack_client_class,
+                                      mock_create_stack,
+                                      mock_cert_manager,
+                                      mock_trust_manager):
+        e = exception.TrusteeOrTrustToBayFailed(bay_uuid='uuid')
+        mock_trust_manager.create_trustee_and_trust.side_effect = e
+
+        self._test_create_failed(
+            mock_openstack_client_class,
+            mock_cert_manager,
+            mock_trust_manager,
+            exception.TrusteeOrTrustToBayFailed,
+            False
+        )
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(1, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[0].payload['outcome'])
+
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.conductor.handlers.bay_conductor._create_stack')
+    @patch('magnum.common.clients.OpenStackClients')
     def test_create_with_invalid_unicode_name(self,
-                                              mock_uuid,
+                                              mock_openstack_client_class,
                                               mock_create_stack,
-                                              mock_cert_manager):
-        timeout = 15
-        test_uuid = uuid.uuid4()
-        mock_uuid.uuid4.return_value = test_uuid
+                                              mock_cert_manager,
+                                              mock_trust_manager):
         error_message = six.u("""Invalid stack name 测试集群-zoyh253geukk
                               must contain only alphanumeric or "_-."
                               characters, must start with alpha""")
         mock_create_stack.side_effect = exc.HTTPBadRequest(error_message)
 
-        self.assertRaises(exception.InvalidParameterValue,
-                          self.handler.bay_create, self.context,
-                          self.bay, timeout)
-        mock_cert_manager.generate_certificates_to_bay.assert_called_once_with(
-            self.bay)
+        self._test_create_failed(
+            mock_openstack_client_class,
+            mock_cert_manager,
+            mock_trust_manager,
+            exception.InvalidParameterValue
+        )
 
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(2, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.create', notifications[1].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[1].payload['outcome'])
+
+    @patch('magnum.conductor.handlers.bay_conductor.HeatPoller')
+    @patch('heatclient.common.template_utils'
+           '.process_multiple_environments_and_files')
+    @patch('heatclient.common.template_utils.get_template_contents')
+    @patch('magnum.conductor.handlers.bay_conductor'
+           '._extract_template_definition')
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.conductor.handlers.bay_conductor.short_id')
     @patch('magnum.common.clients.OpenStackClients')
-    def test_bay_delete(self, mock_openstack_client_class):
+    def test_create_with_environment(self,
+                                     mock_openstack_client_class,
+                                     mock_short_id,
+                                     mock_cert_manager,
+                                     mock_trust_manager,
+                                     mock_extract_tmpl_def,
+                                     mock_get_template_contents,
+                                     mock_process_mult,
+                                     mock_heat_poller_class):
+        timeout = 15
+        self.bay.baymodel_id = self.baymodel.uuid
+        bay_name = self.bay.name
+        mock_short_id.generate_id.return_value = 'short_id'
+        mock_poller = mock.MagicMock()
+        mock_poller.poll_and_check.return_value = loopingcall.LoopingCallDone()
+        mock_heat_poller_class.return_value = mock_poller
+
+        mock_extract_tmpl_def.return_value = (
+            'the/template/path.yaml',
+            {'heat_param_1': 'foo', 'heat_param_2': 'bar'},
+            ['env_file_1', 'env_file_2'])
+
+        mock_get_template_contents.return_value = (
+            {'tmpl_file_1': 'some content',
+             'tmpl_file_2': 'some more content'},
+            'some template yaml')
+
+        def do_mock_process_mult(env_paths=None, env_list_tracker=None):
+            self.assertEqual(env_list_tracker, [])
+            for f in env_paths:
+                env_list_tracker.append('file:///' + f)
+            env_map = {path: 'content of ' + path for path in env_list_tracker}
+            return (env_map, None)
+
+        mock_process_mult.side_effect = do_mock_process_mult
+
+        mock_hc = mock.Mock()
+        mock_hc.stacks.create.return_value = {'stack': {'id': 'stack-id'}}
+
+        osc = mock.Mock()
+        osc.heat.return_value = mock_hc
+        mock_openstack_client_class.return_value = osc
+
+        self.handler.bay_create(self.context, self.bay, timeout)
+
+        mock_extract_tmpl_def.assert_called_once_with(self.context, self.bay)
+        mock_get_template_contents.assert_called_once_with(
+            'the/template/path.yaml')
+        mock_process_mult.assert_called_once_with(
+            env_paths=['the/template/env_file_1', 'the/template/env_file_2'],
+            env_list_tracker=mock.ANY)
+        mock_hc.stacks.create.assert_called_once_with(
+            environment_files=['file:///the/template/env_file_1',
+                               'file:///the/template/env_file_2'],
+            files={
+                'tmpl_file_1': 'some content',
+                'tmpl_file_2': 'some more content',
+                'file:///the/template/env_file_1':
+                    'content of file:///the/template/env_file_1',
+                'file:///the/template/env_file_2':
+                    'content of file:///the/template/env_file_2'
+            },
+            parameters={'heat_param_1': 'foo', 'heat_param_2': 'bar'},
+            stack_name=('%s-short_id' % bay_name),
+            template='some template yaml',
+            timeout_mins=timeout)
+
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.common.clients.OpenStackClients')
+    def test_bay_delete(self, mock_openstack_client_class, cert_manager):
         osc = mock.MagicMock()
         mock_openstack_client_class.return_value = osc
         osc.heat.side_effect = exc.HTTPNotFound
         self.handler.bay_delete(self.context, self.bay.uuid)
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(2, len(notifications))
+        self.assertEqual(
+            'magnum.bay.delete', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.delete', notifications[1].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_SUCCESS, notifications[1].payload['outcome'])
+        self.assertEqual(1,
+                         cert_manager.delete_certificates_from_bay.call_count)
         # The bay has been destroyed
-        self.assertRaises(exception.BayNotFound,
+        self.assertRaises(exception.ClusterNotFound,
                           objects.Bay.get, self.context, self.bay.uuid)
+
+    @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
+    @patch('magnum.common.clients.OpenStackClients')
+    def test_bay_delete_conflict(self, mock_openstack_client_class,
+                                 cert_manager):
+        osc = mock.MagicMock()
+        mock_openstack_client_class.return_value = osc
+        osc.heat.side_effect = exc.HTTPConflict
+        self.assertRaises(exception.OperationInProgress,
+                          self.handler.bay_delete,
+                          self.context,
+                          self.bay.uuid)
+
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(2, len(notifications))
+        self.assertEqual(
+            'magnum.bay.delete', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_PENDING, notifications[0].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.delete', notifications[1].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[1].payload['outcome'])
+        self.assertEqual(0,
+                         cert_manager.delete_certificates_from_bay.call_count)
 
 
 class TestHeatPoller(base.TestCase):
@@ -268,7 +502,51 @@ class TestHeatPoller(base.TestCase):
         baymodel = objects.BayModel(self.context, **baymodel_dict)
         mock_retrieve_baymodel.return_value = baymodel
         poller = bay_conductor.HeatPoller(mock_openstack_client, bay)
+        poller.get_version_info = mock.MagicMock()
         return (mock_heat_stack, bay, poller)
+
+    def test_poll_and_check_send_notification(self):
+        mock_heat_stack, bay, poller = self.setup_poll_test()
+        mock_heat_stack.stack_status = bay_status.CREATE_COMPLETE
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+        mock_heat_stack.stack_status = bay_status.CREATE_FAILED
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+        mock_heat_stack.stack_status = bay_status.DELETE_COMPLETE
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+        mock_heat_stack.stack_status = bay_status.DELETE_FAILED
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+        mock_heat_stack.stack_status = bay_status.UPDATE_COMPLETE
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+        mock_heat_stack.stack_status = bay_status.UPDATE_FAILED
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+
+        self.assertEqual(6, poller.attempts)
+        notifications = fake_notifier.NOTIFICATIONS
+        self.assertEqual(6, len(notifications))
+        self.assertEqual(
+            'magnum.bay.create', notifications[0].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_SUCCESS, notifications[0].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.create', notifications[1].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[1].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.delete', notifications[2].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_SUCCESS, notifications[2].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.delete', notifications[3].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[3].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.update', notifications[4].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_SUCCESS, notifications[4].payload['outcome'])
+        self.assertEqual(
+            'magnum.bay.update', notifications[5].event_type)
+        self.assertEqual(
+            taxonomy.OUTCOME_FAILURE, notifications[5].payload['outcome'])
 
     def test_poll_no_save(self):
         mock_heat_stack, bay, poller = self.setup_poll_test()
@@ -325,6 +603,30 @@ class TestHeatPoller(base.TestCase):
         self.assertEqual(2, bay.save.call_count)
         self.assertEqual(bay_status.UPDATE_FAILED, bay.status)
         self.assertEqual(2, bay.node_count)
+        self.assertEqual(1, poller.attempts)
+
+    def test_poll_done_by_rollback_complete(self):
+        mock_heat_stack, bay, poller = self.setup_poll_test()
+
+        mock_heat_stack.stack_status = bay_status.ROLLBACK_COMPLETE
+        mock_heat_stack.parameters = {'number_of_minions': 1}
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+
+        self.assertEqual(2, bay.save.call_count)
+        self.assertEqual(bay_status.ROLLBACK_COMPLETE, bay.status)
+        self.assertEqual(1, bay.node_count)
+        self.assertEqual(1, poller.attempts)
+
+    def test_poll_done_by_rollback_failed(self):
+        mock_heat_stack, bay, poller = self.setup_poll_test()
+
+        mock_heat_stack.stack_status = bay_status.ROLLBACK_FAILED
+        mock_heat_stack.parameters = {'number_of_minions': 1}
+        self.assertRaises(loopingcall.LoopingCallDone, poller.poll_and_check)
+
+        self.assertEqual(2, bay.save.call_count)
+        self.assertEqual(bay_status.ROLLBACK_FAILED, bay.status)
+        self.assertEqual(1, bay.node_count)
         self.assertEqual(1, poller.attempts)
 
     def test_poll_destroy(self):
@@ -430,13 +732,16 @@ class TestHeatPoller(base.TestCase):
 
         self.assertEqual(2, bay.node_count)
 
+    @patch('magnum.conductor.handlers.bay_conductor.trust_manager')
     @patch('magnum.conductor.handlers.bay_conductor.cert_manager')
-    def test_delete_complete(self, cert_manager):
+    def test_delete_complete(self, cert_manager, trust_manager):
         mock_heat_stack, bay, poller = self.setup_poll_test()
         poller._delete_complete()
         self.assertEqual(1, bay.destroy.call_count)
         self.assertEqual(1,
                          cert_manager.delete_certificates_from_bay.call_count)
+        self.assertEqual(1,
+                         trust_manager.delete_trustee_and_trust.call_count)
 
     def test_create_or_complete(self):
         mock_heat_stack, bay, poller = self.setup_poll_test()

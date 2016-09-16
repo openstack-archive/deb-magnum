@@ -36,7 +36,19 @@ class TestAttrValidator(base.BaseTestCase):
         attr_validator.validate_flavor(mock_os_cli, 'test_flavor')
         self.assertTrue(mock_nova.flavors.list.called)
 
-    def test_validate_flavor_with_invaild_flavor(self):
+    def test_validate_flavor_with_none_flavor(self):
+        mock_flavor = mock.MagicMock()
+        mock_flavor.name = 'test_flavor'
+        mock_flavor.id = 'test_flavor_id'
+        mock_flavors = [mock_flavor]
+        mock_nova = mock.MagicMock()
+        mock_nova.flavors.list.return_value = mock_flavors
+        mock_os_cli = mock.MagicMock()
+        mock_os_cli.nova.return_value = mock_nova
+        attr_validator.validate_flavor(mock_os_cli, None)
+        self.assertFalse(mock_nova.flavors.list.called)
+
+    def test_validate_flavor_with_invalid_flavor(self):
         mock_flavor = mock.MagicMock()
         mock_flavor.name = 'test_flavor_not_equal'
         mock_flavor.id = 'test_flavor_id_not_equal'
@@ -59,6 +71,18 @@ class TestAttrValidator(base.BaseTestCase):
         attr_validator.validate_external_network(mock_os_cli, 'test_ext_net')
         self.assertTrue(mock_neutron.list_networks.called)
 
+    def test_validate_external_network_with_multiple_valid_network(self):
+        mock_networks = {'networks':
+                         [{'name': 'test_ext_net', 'id': 'test_ext_net_id1'},
+                          {'name': 'test_ext_net', 'id': 'test_ext_net_id2'}]}
+        mock_neutron = mock.MagicMock()
+        mock_neutron.list_networks.return_value = mock_networks
+        mock_os_cli = mock.MagicMock()
+        mock_os_cli.neutron.return_value = mock_neutron
+        self.assertRaises(exception.Conflict,
+                          attr_validator.validate_external_network,
+                          mock_os_cli, 'test_ext_net')
+
     def test_validate_external_network_with_invalid_network(self):
         mock_networks = {'networks': [{'name': 'test_ext_net_not_equal',
                          'id': 'test_ext_net_id_not_equal'}]}
@@ -66,7 +90,7 @@ class TestAttrValidator(base.BaseTestCase):
         mock_neutron.list_networks.return_value = mock_networks
         mock_os_cli = mock.MagicMock()
         mock_os_cli.neutron.return_value = mock_neutron
-        self.assertRaises(exception.NetworkNotFound,
+        self.assertRaises(exception.ExternalNetworkNotFound,
                           attr_validator.validate_external_network,
                           mock_os_cli, 'test_ext_net')
 
@@ -88,6 +112,80 @@ class TestAttrValidator(base.BaseTestCase):
                           attr_validator.validate_keypair,
                           mock_os_cli, 'test_keypair')
 
+    def test_validate_labels_main_no_label(self):
+        fake_labels = {}
+        attr_validator.validate_labels(fake_labels)
+
+    def test_validate_labels_main_isolation_invalid_label(self):
+        fake_labels = {'mesos_slave_isolation': 'abc'}
+        self.assertRaises(exception.InvalidParameterValue,
+                          attr_validator.validate_labels,
+                          fake_labels)
+
+    def test_validate_labels_isolation_valid(self):
+        fake_labels = {'mesos_slave_isolation':
+                       'filesystem/posix,filesystem/linux'}
+        attr_validator.validate_labels_isolation(fake_labels)
+
+    def test_validate_labels_main_with_valid_providers_none_isolation(self):
+        fake_labels = {'mesos_slave_image_providers': 'docker'}
+        self.assertRaises(exception.RequiredParameterNotProvided,
+                          attr_validator.validate_labels,
+                          fake_labels)
+
+    def test_validate_labels_with_valid_providers_invalid_isolation(self):
+        fake_labels = {'mesos_slave_image_providers': 'docker',
+                       'mesos_slave_isolation': 'abc'}
+        self.assertRaises(exception.RequiredParameterNotProvided,
+                          attr_validator.validate_labels_image_providers,
+                          fake_labels)
+
+    def test_validate_labels_with_valid_providers_invalid_providers(self):
+        fake_labels = {'mesos_slave_image_providers': 'appc'}
+        attr_validator.validate_labels_image_providers(fake_labels)
+
+    def test_validate_labels_with_invalid_providers(self):
+        fake_labels = {'mesos_slave_image_providers': 'abc'}
+        self.assertRaises(exception.InvalidParameterValue,
+                          attr_validator.validate_labels_image_providers,
+                          fake_labels)
+
+    def test_validate_labels_with_valid_providers_none_isolation(self):
+        fake_labels = {'mesos_slave_image_providers': 'docker'}
+        self.assertRaises(exception.RequiredParameterNotProvided,
+                          attr_validator.validate_labels_image_providers,
+                          fake_labels)
+
+    def test_validate_labels_with_valid_providers_valid_isolation(self):
+        fake_labels = {'mesos_slave_image_providers': 'docker',
+                       'mesos_slave_isolation': 'docker/runtime'}
+        attr_validator.validate_labels_image_providers(fake_labels)
+
+    def test_validate_labels_with_environment_variables_valid_json(self):
+        contents = '{"step": "upgrade", "interface": "deploy"}'
+        fack_labels = {'mesos_slave_executor_env_variables': contents}
+        attr_validator.validate_labels_executor_env_variables(
+            fack_labels)
+
+    def test_validate_labels_with_environment_variables_bad_json(self):
+        fack_labels = {'mesos_slave_executor_env_variables': 'step'}
+        self.assertRaisesRegex(
+            exception.InvalidParameterValue,
+            "Json format error",
+            attr_validator.validate_labels_executor_env_variables,
+            fack_labels)
+
+    def test_validate_labels_with_valid_isolation(self):
+        fake_labels = {'mesos_slave_isolation':
+                       'filesystem/posix,filesystem/linux'}
+        attr_validator.validate_labels_isolation(fake_labels)
+
+    def test_validate_labels_isolation_invalid(self):
+        fake_labels = {'mesos_slave_isolation': 'filesystem'}
+        self.assertRaises(exception.InvalidParameterValue,
+                          attr_validator.validate_labels_isolation,
+                          fake_labels)
+
     @mock.patch('magnum.api.utils.get_openstack_resource')
     def test_validate_image_with_valid_image_by_name(self, mock_os_res):
         mock_image = {'name': 'fedora-21-atomic-5',
@@ -97,6 +195,17 @@ class TestAttrValidator(base.BaseTestCase):
         mock_os_cli = mock.MagicMock()
         attr_validator.validate_image(mock_os_cli, 'fedora-21-atomic-5')
         self.assertTrue(mock_os_res.called)
+
+    @mock.patch('magnum.api.utils.get_openstack_resource')
+    def test_validate_image_with_forbidden_image(self, mock_os_res):
+        def glance_side_effect(cli, image, name):
+            raise glance_exception.HTTPForbidden()
+
+        mock_os_res.side_effect = glance_side_effect
+        mock_os_cli = mock.MagicMock()
+        self.assertRaises(exception.ImageNotAuthorized,
+                          attr_validator.validate_image, mock_os_cli,
+                          'fedora-21-atomic-5')
 
     @mock.patch('magnum.api.utils.get_openstack_resource')
     def test_validate_image_with_valid_image_by_id(self, mock_os_res):
@@ -144,7 +253,7 @@ class TestAttrValidator(base.BaseTestCase):
                           mock_os_cli, 'fedora-21-atomic-5')
 
     @mock.patch('magnum.api.utils.get_openstack_resource')
-    def test_validate_image_with_empty_os_distro(self, mock_os_res):
+    def test_validate_image_when_user_forbidden(self, mock_os_res):
         mock_image = {'name': 'fedora-21-atomic-5',
                       'id': 'e33f0988-1730-405e-8401-30cbc8535302',
                       'os_distro': ''}
@@ -169,3 +278,21 @@ class TestAttrValidator(base.BaseTestCase):
         self.assertRaises(exception.FlavorNotFound,
                           attr_validator.validate_os_resources,
                           mock_context, mock_baymodel)
+
+    @mock.patch('magnum.common.clients.OpenStackClients')
+    @mock.patch('magnum.api.attr_validator.validate_labels')
+    def test_validate_os_resources_with_label(self, mock_validate_labels,
+                                              mock_os_cli):
+        mock_baymodel = {'labels': {'mesos_slave_isolation': 'abc'}}
+        mock_context = mock.MagicMock()
+        self.assertRaises(exception.InvalidParameterValue,
+                          attr_validator.validate_os_resources, mock_context,
+                          mock_baymodel)
+
+    @mock.patch('magnum.common.clients.OpenStackClients')
+    @mock.patch('magnum.api.attr_validator.validators')
+    def test_validate_os_resources_without_validator(self, mock_validators,
+                                                     mock_os_cli):
+        mock_baymodel = {}
+        mock_context = mock.MagicMock()
+        attr_validator.validate_os_resources(mock_context, mock_baymodel)

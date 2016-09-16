@@ -27,6 +27,8 @@ class BayStatus(fields.Enum):
     DELETE_COMPLETE = 'DELETE_COMPLETE'
     RESUME_COMPLETE = 'RESUME_COMPLETE'
     RESTORE_COMPLETE = 'RESTORE_COMPLETE'
+    ROLLBACK_IN_PROGRESS = 'ROLLBACK_IN_PROGRESS'
+    ROLLBACK_FAILED = 'ROLLBACK_FAILED'
     ROLLBACK_COMPLETE = 'ROLLBACK_COMPLETE'
     SNAPSHOT_COMPLETE = 'SNAPSHOT_COMPLETE'
     CHECK_COMPLETE = 'CHECK_COMPLETE'
@@ -35,8 +37,12 @@ class BayStatus(fields.Enum):
     ALL = (CREATE_IN_PROGRESS, CREATE_FAILED, CREATE_COMPLETE,
            UPDATE_IN_PROGRESS, UPDATE_FAILED, UPDATE_COMPLETE,
            DELETE_IN_PROGRESS, DELETE_FAILED, DELETE_COMPLETE,
-           RESUME_COMPLETE, RESTORE_COMPLETE, ROLLBACK_COMPLETE,
-           SNAPSHOT_COMPLETE, CHECK_COMPLETE, ADOPT_COMPLETE)
+           RESUME_COMPLETE, RESTORE_COMPLETE, ROLLBACK_IN_PROGRESS,
+           ROLLBACK_FAILED, ROLLBACK_COMPLETE, SNAPSHOT_COMPLETE,
+           CHECK_COMPLETE, ADOPT_COMPLETE)
+
+    STATUS_FAILED = (CREATE_FAILED, UPDATE_FAILED,
+                     DELETE_FAILED, ROLLBACK_FAILED)
 
     def __init__(self):
         super(BayStatus, self).__init__(valid_values=BayStatus.ALL)
@@ -65,6 +71,30 @@ class BayType(fields.Enum):
         super(BayType, self).__init__(valid_values=BayType.ALL)
 
 
+class DockerStorageDriver(fields.Enum):
+    ALL = (
+        DEVICEMAPPER, OVERLAY,
+    ) = (
+        'devicemapper', 'overlay',
+    )
+
+    def __init__(self):
+        super(DockerStorageDriver, self).__init__(
+            valid_values=DockerStorageDriver.ALL)
+
+
+class MagnumServiceState(fields.Enum):
+    ALL = (
+        up, down
+    ) = (
+        'up', 'down',
+    )
+
+    def __init__(self):
+        super(MagnumServiceState, self).__init__(
+            valid_values=MagnumServiceState.ALL)
+
+
 class ListOfDictsField(fields.AutoTypedField):
     AUTO_TYPE = fields.List(fields.Dict(fields.FieldType()))
 
@@ -73,9 +103,17 @@ class BayStatusField(fields.BaseEnumField):
     AUTO_TYPE = BayStatus()
 
 
+class MagnumServiceField(fields.BaseEnumField):
+    AUTO_TYPE = MagnumServiceState()
+
+
 class ContainerStatusField(fields.BaseEnumField):
     AUTO_TYPE = ContainerStatus()
 
 
 class BayTypeField(fields.BaseEnumField):
     AUTO_TYPE = BayType()
+
+
+class DockerStorageDriverField(fields.BaseEnumField):
+    AUTO_TYPE = DockerStorageDriver()

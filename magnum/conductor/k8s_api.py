@@ -14,13 +14,12 @@
 
 from tempfile import NamedTemporaryFile
 
+from k8sclient.client import api_client
+from k8sclient.client.apis import apiv_api
 from oslo_log import log as logging
 
-from magnum.common.pythonk8sclient.swagger_client import api_client
-from magnum.common.pythonk8sclient.swagger_client.apis import apiv_api
-from magnum.conductor.handlers.common import cert_manager
-from magnum.conductor import utils
-
+from magnum.conductor.handlers.common.cert_manager import create_client_files
+from magnum.i18n import _LE
 
 LOG = logging.getLogger(__name__)
 
@@ -38,18 +37,18 @@ class K8sAPI(apiv_api.ApivApi):
             tmp.write(content)
             tmp.flush()
         except Exception as err:
-            LOG.error("Error while creating temp file: %s", err)
-            raise err
+            LOG.error(_LE("Error while creating temp file: %s"), err)
+            raise
         return tmp
 
-    def __init__(self, context, bay_uuid):
+    def __init__(self, context, bay):
         self.ca_file = None
         self.cert_file = None
         self.key_file = None
 
-        bay = utils.retrieve_bay(context, bay_uuid)
         if bay.magnum_cert_ref:
-            self._create_certificate_files(bay)
+            (self.ca_file, self.key_file,
+             self.cert_file) = create_client_files(bay, context)
 
         # build a connection with Kubernetes master
         client = api_client.ApiClient(bay.api_address,
@@ -58,21 +57,6 @@ class K8sAPI(apiv_api.ApivApi):
                                       ca_certs=self.ca_file.name)
 
         super(K8sAPI, self).__init__(client)
-
-    def _create_certificate_files(self, bay):
-        """Read certificate and key for a bay and stores in files.
-
-        :param bay: Bay object
-        """
-        magnum_cert_obj = cert_manager.get_bay_magnum_cert(bay)
-        self.cert_file = self._create_temp_file_with_content(
-            magnum_cert_obj.get_certificate())
-        private_key = magnum_cert_obj.get_decrypted_private_key()
-        self.key_file = self._create_temp_file_with_content(
-            private_key)
-        ca_cert_obj = cert_manager.get_bay_ca_certificate(bay)
-        self.ca_file = self._create_temp_file_with_content(
-            ca_cert_obj.get_certificate())
 
     def __del__(self):
         if self.ca_file:
@@ -83,13 +67,13 @@ class K8sAPI(apiv_api.ApivApi):
             self.key_file.close()
 
 
-def create_k8s_api(context, bay_uuid):
+def create_k8s_api(context, bay):
     """Create a kubernetes API client
 
     Creates connection with Kubernetes master and creates ApivApi instance
     to call Kubernetes APIs.
 
     :param context: The security context
-    :param bay_uuid:  Unique identifier for the Bay
+    :param bay:  Bay object
     """
-    return K8sAPI(context, bay_uuid)
+    return K8sAPI(context, bay)

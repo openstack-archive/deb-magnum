@@ -1,0 +1,64 @@
+#cloud-config
+write_files:
+  - path: /etc/systemd/system/enable-kubelet.service
+    owner: "root:root"
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Enable Kubelet
+
+      [Service]
+      Type=oneshot
+      ExecStart=/etc/sysconfig/enable-kubelet-minion.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/sysconfig/enable-kubelet-minion.sh
+    owner: "root:root"
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+
+      . /etc/sysconfig/heat-params
+      myip=$(ip addr show eth0 |
+             awk '$1 == "inet" {print $2}' | cut -f1 -d/)
+
+      KUBE_CERTS_PATH=/etc/kubernetes/ssl
+      TLS_CERT_FILE=${KUBE_CERTS_PATH}/worker.pem
+      TLS_PRIVATE_KEY_FILE=${KUBE_CERTS_PATH}/worker-key.pem
+      KUBE_PROTOCOL="https"
+      KUBE_CONFIG="/etc/kubernetes/config/worker-kubeconfig.yaml"
+      if [ "$TLS_DISABLED" == "True" ]; then
+        TLS_CERT_FILE=
+        TLS_PRIVATE_KEY_FILE=
+        KUBE_PROTOCOL="http"
+        KUBE_CONFIG=
+      fi
+      KUBE_MASTER_URI="$KUBE_PROTOCOL://$KUBE_MASTER_IP:$KUBE_API_PORT"
+
+      CONF_FILE=/etc/systemd/system/kubelet.service
+      cat > $CONF_FILE <<EOF
+      [Service]
+      Environment=KUBELET_VERSION=${KUBE_VERSION}_coreos.0
+      ExecStart=/usr/lib/coreos/kubelet-wrapper \
+        --api_servers=${KUBE_MASTER_URI} \
+        --address=0.0.0.0 \
+        --register-node=true \
+        --allow-privileged=true \
+        --config=/etc/kubernetes/manifests \
+        --hostname-override=${myip} \
+        --logtostderr=true \
+        --v=0 \
+        --cadvisor-port=4194 \
+        --kubeconfig=${KUBE_CONFIG} \
+        --tls-cert-file=${TLS_CERT_FILE} \
+        --tls-private-key-file=${TLS_PRIVATE_KEY_FILE}
+      Restart=always
+      RestartSec=10
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      systemctl enable kubelet
+      systemctl --no-block start kubelet

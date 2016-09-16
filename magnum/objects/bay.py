@@ -13,10 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_utils import strutils
+from oslo_utils import uuidutils
 from oslo_versionedobjects import fields
 
 from magnum.common import exception
-from magnum.common import utils
 from magnum.db import api as dbapi
 from magnum.objects import base
 from magnum.objects import baymodel
@@ -34,7 +35,9 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
     # Version 1.5: Reanme 'registry_trust_id' to 'trust_id'
     #              Add 'trustee_user_name', 'trustee_password',
     #              'trustee_user_id' field
-    VERSION = '1.5'
+    # Version 1.6: Add rollback support for Bay
+    # Version 1.7: Added 'coe_version'  and 'container_version' fields
+    VERSION = '1.7'
 
     dbapi = dbapi.get_instance()
 
@@ -61,7 +64,9 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         'trust_id': fields.StringField(nullable=True),
         'trustee_username': fields.StringField(nullable=True),
         'trustee_password': fields.StringField(nullable=True),
-        'trustee_user_id': fields.StringField(nullable=True)
+        'trustee_user_id': fields.StringField(nullable=True),
+        'coe_version': fields.StringField(nullable=True),
+        'container_version': fields.StringField(nullable=True)
     }
 
     @staticmethod
@@ -94,9 +99,9 @@ class Bay(base.MagnumPersistentObject, base.MagnumObject,
         :param context: Security context
         :returns: a :class:`Bay` object.
         """
-        if utils.is_int_like(bay_id):
+        if strutils.is_int_like(bay_id):
             return cls.get_by_id(context, bay_id)
-        elif utils.is_uuid_like(bay_id):
+        elif uuidutils.is_uuid_like(bay_id):
             return cls.get_by_uuid(context, bay_id)
         else:
             raise exception.InvalidIdentity(identity=bay_id)

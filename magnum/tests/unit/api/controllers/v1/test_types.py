@@ -12,11 +12,13 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+from oslo_utils import uuidutils
 
 import mock
 import six
 import webtest
 import wsme
+from wsme import types as wtypes
 
 from magnum.api.controllers.v1 import types
 from magnum.common import exception
@@ -36,12 +38,22 @@ class TestMacAddressType(base.FunctionalTest):
         self.assertRaises(exception.InvalidMAC,
                           types.MacAddressType.validate, 'invalid-mac')
 
+    def test_frombasetype(self):
+        test_mac = 'aa:bb:cc:11:22:33'
+        with mock.patch.object(utils, 'validate_and_normalize_mac') as m_mock:
+            types.MacAddressType.frombasetype(test_mac)
+            m_mock.assert_called_once_with(test_mac)
+
+    def test_frombasetype_no_value(self):
+        test_mac = None
+        self.assertIsNone(types.MacAddressType.frombasetype(test_mac))
+
 
 class TestUuidType(base.FunctionalTest):
 
     def test_valid_uuid(self):
         test_uuid = '1a1a1a1a-2b2b-3c3c-4d4d-5e5e5e5e5e5e'
-        with mock.patch.object(utils, 'is_uuid_like') as uuid_mock:
+        with mock.patch.object(uuidutils, 'is_uuid_like') as uuid_mock:
             types.UuidType.validate(test_uuid)
             uuid_mock.assert_called_once_with(test_uuid)
 
@@ -50,12 +62,15 @@ class TestUuidType(base.FunctionalTest):
                           types.UuidType.validate, 'invalid-uuid')
 
 
+class MyBaseType(object):
+    """Helper class, patched by objects of type MyPatchType"""
+    mandatory = wsme.wsattr(wtypes.text, mandatory=True)
+
+
 class MyPatchType(types.JsonPatchType):
     """Helper class for TestJsonPatchType tests."""
-
-    @staticmethod
-    def mandatory_attrs():
-        return ['/mandatory']
+    _api_base = MyBaseType
+    _extra_non_removable_attrs = {'/non_removable'}
 
     @staticmethod
     def internal_attrs():
@@ -97,16 +112,32 @@ class TestJsonPatchType(base.FunctionalTest):
         ret = self._patch_json(patch, True)
         self.assertEqual(400, ret.status_int)
 
-    def test_mandatory_attr(self):
-        patch = [{'op': 'replace', 'path': '/mandatory', 'value': 'foo'}]
+    def test_cannot_remove_internal_attr(self):
+        patch = [{'path': '/internal', 'op': 'remove'}]
+        ret = self._patch_json(patch, True)
+        self.assertEqual(400, ret.status_int)
+
+    def test_cannot_add_internal_attr(self):
+        patch = [{'path': '/internal', 'op': 'add', 'value': 'foo'}]
+        ret = self._patch_json(patch, True)
+        self.assertEqual(400, ret.status_int)
+
+    def test_update_mandatory_attr(self):
+        patch = [{'path': '/mandatory', 'op': 'replace', 'value': 'foo'}]
         ret = self._patch_json(patch, False)
         self.assertEqual(200, ret.status_int)
         self.assertEqual(patch, ret.json)
 
     def test_cannot_remove_mandatory_attr(self):
-        patch = [{'op': 'remove', 'path': '/mandatory'}]
+        patch = [{'path': '/mandatory', 'op': 'remove'}]
         ret = self._patch_json(patch, True)
         self.assertEqual(400, ret.status_int)
+
+    def test_cannot_remove_extra_non_removable_attr(self):
+        patch = [{'path': '/non_removable', 'op': 'remove'}]
+        ret = self._patch_json(patch, True)
+        self.assertEqual(400, ret.status_int)
+        self.assertTrue(ret.json['faultstring'])
 
     def test_missing_required_fields_path(self):
         missing_path = [{'op': 'remove'}]
@@ -206,6 +237,10 @@ class TestBooleanType(base.FunctionalTest):
         self.assertRaises(exception.Invalid, v.validate, "invalid-value")
         self.assertRaises(exception.Invalid, v.validate, "01")
 
+    def test_frombasetype_no_value(self):
+        v = types.BooleanType()
+        self.assertIsNone(v.frombasetype(None))
+
 
 class TestNameType(base.FunctionalTest):
 
@@ -216,3 +251,10 @@ class TestNameType(base.FunctionalTest):
     def test_invalid_name(self):
         self.assertRaises(exception.InvalidName, types.NameType.validate, None)
         self.assertRaises(exception.InvalidName, types.NameType.validate, '')
+
+    def test_frombasetype_no_value(self):
+        self.assertEqual('name', types.NameType.frombasetype('name'))
+        self.assertEqual(1234, types.NameType.frombasetype(1234))
+
+    def test_frombasetype(self):
+        self.assertIsNone(types.NameType.frombasetype(None))

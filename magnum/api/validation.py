@@ -15,11 +15,11 @@
 
 import decorator
 from oslo_config import cfg
+from oslo_utils import uuidutils
 import pecan
 
 from magnum.api import utils as api_utils
 from magnum.common import exception
-from magnum.common import utils
 from magnum.i18n import _
 from magnum import objects
 
@@ -71,7 +71,7 @@ def enforce_bay_types(*bay_types):
             bay = objects.Bay.get_by_uuid(pecan.request.context, obj.bay_uuid)
         else:
             bay_ident = args[2]
-            if utils.is_uuid_like(bay_ident):
+            if uuidutils.is_uuid_like(bay_ident):
                 bay = objects.Bay.get_by_uuid(pecan.request.context, bay_ident)
             else:
                 bay = objects.Bay.get_by_name(pecan.request.context, bay_ident)
@@ -133,6 +133,16 @@ def enforce_volume_driver_types_create():
     return wrapper
 
 
+def enforce_volume_storage_size_create():
+    @decorator.decorator
+    def wrapper(func, *args, **kwargs):
+        baymodel = args[1]
+        _enforce_volume_storage_size(baymodel.as_dict())
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def enforce_volume_driver_types_update():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
@@ -157,6 +167,19 @@ def _enforce_volume_driver_types(baymodel):
     validator.validate_volume_driver(baymodel['volume_driver'])
 
 
+def _enforce_volume_storage_size(baymodel):
+    if not baymodel.get('docker_volume_size'):
+        return
+    volume_size = baymodel.get('docker_volume_size')
+    storage_driver = baymodel.get('docker_storage_driver')
+    if storage_driver == 'devicemapper':
+        if volume_size < 3:
+            raise exception.InvalidParameterValue(
+                'docker volume size %s GB is not valid, '
+                'expecting minimum value 3GB for %s storage '
+                'driver.') % (volume_size, storage_driver)
+
+
 def validate_bay_properties(delta):
 
     update_disallowed_properties = delta - bay_update_allowed_properties
@@ -168,18 +191,14 @@ def validate_bay_properties(delta):
 
 class Validator(object):
 
-    validators = {}
-
     @classmethod
     def get_coe_validator(cls, coe):
-        if not cls.validators:
-            cls.validators = {
-                'kubernetes': K8sValidator(),
-                'swarm': SwarmValidator(),
-                'mesos': MesosValidator(),
-            }
-        if coe in cls.validators:
-            return cls.validators[coe]
+        if coe == 'kubernetes':
+            return K8sValidator()
+        elif coe == 'swarm':
+            return SwarmValidator()
+        elif coe == 'mesos':
+            return MesosValidator()
         else:
             raise exception.InvalidParameterValue(
                 _('Requested COE type %s is not supported.') % coe)

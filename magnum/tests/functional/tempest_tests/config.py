@@ -29,7 +29,7 @@ magnum_group = cfg.OptGroup(name="magnum", title="Magnum Options")
 
 MagnumGroup = [
     cfg.StrOpt("image_id",
-               default="fedora-21-atomic-5",
+               default="fedora-atomic-latest",
                help="Image id to be used for baymodel."),
 
     cfg.StrOpt("nic_id",
@@ -54,7 +54,13 @@ MagnumGroup = [
 
     cfg.StrOpt("csr_location",
                default="/opt/stack/new/magnum/default.csr",
-               help="CSR location for certificates."),
+               deprecated_for_removal=True,
+               help="CSR location for certificates. This option is no "
+               "longer used for anything."),
+
+    cfg.StrOpt("dns_nameserver",
+               default="8.8.8.8",
+               help="DNS nameserver to use for baymodels."),
 
     cfg.StrOpt("copy_logs",
                default=True,
