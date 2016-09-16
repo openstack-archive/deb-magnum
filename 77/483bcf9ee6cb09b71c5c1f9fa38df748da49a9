@@ -1,0 +1,9 @@
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 16 Sep 2016 07:36:08 +0000
+Reviewed-on: https://review.openstack.org/370795
+Project: openstack/deb-magnum
+Branch: refs/heads/master
