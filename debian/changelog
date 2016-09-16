@@ -1,5 +1,9 @@
-magnum (2.0.0-6) UNRELEASED; urgency=medium
+magnum (3.0.0-1) experimental; urgency=medium
 
+  * New upstream release.
+  * Using OpenStack Gerrit as VCS URLs.
+  * Fixed (build-)depends for this release.
+  * Removed all patches (now irrelevant).
   * Updated Danish translation of the debconf templates (Closes: #830647).
 
  -- Thomas Goirand <zigo@debian.org>  Mon, 11 Jul 2016 14:31:58 +0200

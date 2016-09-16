@@ -14,6 +14,7 @@
 
 import mock
 
+from magnum.common import exception
 from magnum.conductor.handlers.common import cert_manager
 from magnum.tests import base
 
@@ -56,6 +57,7 @@ class CertManagerTestCase(base.BaseTestCase):
             private_key=expected_ca_cert['private_key'],
             private_key_passphrase=expected_ca_password,
             name=expected_ca_name,
+            context=None
         )
 
     @mock.patch('magnum.common.x509.operations.generate_client_certificate')
@@ -95,6 +97,7 @@ class CertManagerTestCase(base.BaseTestCase):
             private_key=expected_cert['private_key'],
             private_key_passphrase=expected_password,
             name=expected_name,
+            context=None
         )
 
     def _test_generate_certificates(self,
@@ -117,9 +120,11 @@ class CertManagerTestCase(base.BaseTestCase):
         self.assertEqual(expected_ca_cert_ref, mock_bay.ca_cert_ref)
         self.assertEqual(expected_cert_ref, mock_bay.magnum_cert_ref)
 
-        mock_generate_ca_cert.assert_called_once_with(expected_ca_name)
+        mock_generate_ca_cert.assert_called_once_with(expected_ca_name,
+                                                      context=None)
         mock_generate_client_cert.assert_called_once_with(
-            expected_ca_name, expected_ca_cert, expected_ca_password)
+            expected_ca_name, expected_ca_cert, expected_ca_password,
+            context=None)
 
     @mock.patch('magnum.conductor.handlers.common.cert_manager.'
                 '_generate_client_cert')
@@ -152,6 +157,16 @@ class CertManagerTestCase(base.BaseTestCase):
                                          mock_generate_ca_cert,
                                          mock_generate_client_cert)
 
+    @mock.patch('magnum.conductor.handlers.common.cert_manager.'
+                '_get_issuer_name')
+    def test_generate_certificates_with_error(self, mock_get_issuer_name):
+        mock_bay = mock.MagicMock()
+        mock_get_issuer_name.side_effect = exception.MagnumException()
+
+        self.assertRaises(exception.CertificatesToBayFailed,
+                          cert_manager.generate_certificates_to_bay,
+                          mock_bay)
+
     @mock.patch('magnum.common.x509.operations.sign')
     def test_sign_node_certificate(self, mock_x509_sign):
         mock_bay = mock.MagicMock()
@@ -167,7 +182,8 @@ class CertManagerTestCase(base.BaseTestCase):
         bay_ca_cert = cert_manager.sign_node_certificate(mock_bay, mock_csr)
 
         self.CertManager.get_cert.assert_called_once_with(
-            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid)
+            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid,
+            context=None)
         mock_x509_sign.assert_called_once_with(mock_csr, mock_bay.name,
                                                mock.sentinel.priv_key,
                                                passphrase)
@@ -189,7 +205,7 @@ class CertManagerTestCase(base.BaseTestCase):
         bay_ca_cert = cert_manager.sign_node_certificate(mock_bay, mock_csr)
 
         self.CertManager.get_cert.assert_called_once_with(
-            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid)
+            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid, context=None)
         mock_x509_sign.assert_called_once_with(mock_csr, mock_bay.uuid,
                                                mock.sentinel.priv_key,
                                                passphrase)
@@ -204,7 +220,7 @@ class CertManagerTestCase(base.BaseTestCase):
         bay_ca_cert = cert_manager.get_bay_ca_certificate(mock_bay)
 
         self.CertManager.get_cert.assert_called_once_with(
-            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid)
+            mock_bay.ca_cert_ref, resource_ref=mock_bay.uuid, context=None)
         self.assertEqual(mock_ca_cert, bay_ca_cert)
 
     def test_delete_certtificate(self):
@@ -218,9 +234,11 @@ class CertManagerTestCase(base.BaseTestCase):
 
         cert_manager.delete_certificates_from_bay(mock_bay)
         mock_delete_cert.assert_any_call(expected_ca_cert_ref,
-                                         resource_ref=mock_bay.uuid)
+                                         resource_ref=mock_bay.uuid,
+                                         context=None)
         mock_delete_cert.assert_any_call(expected_cert_ref,
-                                         resource_ref=mock_bay.uuid)
+                                         resource_ref=mock_bay.uuid,
+                                         context=None)
 
     def test_delete_certtificate_if_raise_error(self):
         mock_delete_cert = self.CertManager.delete_cert
@@ -234,9 +252,11 @@ class CertManagerTestCase(base.BaseTestCase):
 
         cert_manager.delete_certificates_from_bay(mock_bay)
         mock_delete_cert.assert_any_call(expected_ca_cert_ref,
-                                         resource_ref=mock_bay.uuid)
+                                         resource_ref=mock_bay.uuid,
+                                         context=None)
         mock_delete_cert.assert_any_call(expected_cert_ref,
-                                         resource_ref=mock_bay.uuid)
+                                         resource_ref=mock_bay.uuid,
+                                         context=None)
 
     def test_delete_certtificate_without_cert_ref(self):
         mock_delete_cert = self.CertManager.delete_cert

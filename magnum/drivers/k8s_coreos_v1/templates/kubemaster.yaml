@@ -1,0 +1,454 @@
+heat_template_version: 2014-10-16
+
+description: >
+    This is a nested stack that defines a Kubernetes master. This stack is
+    included by an ResourceGroup resource in the parent template
+    (kubeclusters.yaml).
+
+parameters:
+
+  server_image:
+    type: string
+    description: glance image used to boot the server
+
+  master_flavor:
+    type: string
+    description: flavor to use when booting the server
+
+  ssh_key_name:
+    type: string
+    description: name of ssh key to be provisioned on our server
+
+  external_network:
+    type: string
+    description: uuid/name of a network to use for floating ip addresses
+
+  discovery_url:
+    type: string
+    description: >
+      Discovery URL used for bootstrapping the etcd cluster.
+
+  api_pool_id:
+    type: string
+    description: ID of the load balancer pool of k8s API server.
+
+  etcd_pool_id:
+    type: string
+    description: ID of the load balancer pool of etcd server.
+
+  portal_network_cidr:
+    type: string
+    description: >
+      address range used by kubernetes for service portals
+
+  kube_allow_priv:
+    type: string
+    description: >
+      whether or not kubernetes should permit privileged containers.
+    constraints:
+      - allowed_values: ["true", "false"]
+
+  flannel_network_cidr:
+    type: string
+    description: network range for flannel overlay network
+
+  flannel_network_subnetlen:
+    type: number
+    description: size of subnet assigned to each master
+
+  flannel_backend:
+    type: string
+    description: >
+      specify the backend for flannel, default udp backend
+    constraints:
+      - allowed_values: ["udp", "vxlan", "host-gw"]
+
+  fixed_network:
+    type: string
+    description: Network from which to allocate fixed addresses.
+
+  fixed_subnet:
+    type: string
+    description: Subnet from which to allocate fixed addresses.
+
+  wait_condition_timeout:
+    type: number
+    description : >
+      timeout for the Wait Conditions
+
+  network_driver:
+    type: string
+    description: network driver to use for instantiating container networks
+
+  tls_disabled:
+    type: boolean
+    description: whether or not to enable TLS
+
+  kubernetes_port:
+    type: number
+    description: >
+      The port which are used by kube-apiserver to provide Kubernetes
+      service.
+    default: 6443
+
+  kube_version:
+    type: string
+    description: version of kubernetes used for kubernetes cluster
+
+  bay_uuid:
+    type: string
+    description: identifier for the bay this template is generating
+
+  magnum_url:
+    type: string
+    description: endpoint to retrieve TLS certs from
+
+  api_public_address:
+    type: string
+    description: Public IP address of the Kubernetes master server.
+    default: ""
+
+  api_private_address:
+    type: string
+    description: Private IP address of the Kubernetes master server.
+    default: ""
+
+  http_proxy:
+    type: string
+    description: http proxy address for docker
+
+  https_proxy:
+    type: string
+    description: https proxy address for docker
+
+  no_proxy:
+    type: string
+    description: no proxies for docker
+
+  trustee_user_id:
+    type: string
+    description: user id of the trustee
+    default: ""
+
+  trustee_password:
+    type: string
+    description: password of the trustee
+    default: ""
+    hidden: true
+
+  trust_id:
+    type: string
+    description: id of the trust which is used by the trustee
+    default: ""
+    hidden: true
+
+  auth_url:
+    type: string
+    description: url for keystone
+
+resources:
+
+  master_wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  master_wait_condition:
+    type: OS::Heat::WaitCondition
+    depends_on: kube_master
+    properties:
+      handle: {get_resource: master_wait_handle}
+      timeout: {get_param: wait_condition_timeout}
+
+  ######################################################################
+  #
+  # resource that exposes the IPs of either the kube master or the API
+  # LBaaS pool depending on whether LBaaS is enabled for the bay.
+  #
+
+  api_address_switch:
+    type: Magnum::ApiGatewaySwitcher
+    properties:
+      pool_public_ip: {get_param: api_public_address}
+      pool_private_ip: {get_param: api_private_address}
+      master_public_ip: {get_attr: [kube_master_floating, floating_ip_address]}
+      master_private_ip: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+
+  ######################################################################
+  #
+  # security groups.  we need to permit network traffic of various
+  # sorts.
+  #
+
+  secgroup_base:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: icmp
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+
+  secgroup_kubernetes:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: tcp
+          port_range_min: 7080
+          port_range_max: 7080
+        - protocol: tcp
+          port_range_min: 8080
+          port_range_max: 8080
+        - protocol: tcp
+          port_range_min: 2379
+          port_range_max: 2379
+        - protocol: tcp
+          port_range_min: 2380
+          port_range_max: 2380
+        - protocol: tcp
+          port_range_min: 6443
+          port_range_max: 6443
+
+  ######################################################################
+  #
+  # software configs.  these are components that are combined into
+  # a multipart MIME user-data archive.
+  #
+
+  write_heat_params:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: {get_file: fragments/write-heat-params-master.yaml}
+          params:
+            "$KUBE_API_PUBLIC_ADDRESS": {get_attr: [api_address_switch, public_ip]}
+            "$KUBE_API_PRIVATE_ADDRESS": {get_attr: [api_address_switch, private_ip]}
+            "$KUBE_NODE_PUBLIC_IP": {get_attr: [kube_master_floating, floating_ip_address]}
+            "$KUBE_NODE_IP": {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+            "$KUBE_ALLOW_PRIV": {get_param: kube_allow_priv}
+            "$FLANNEL_NETWORK_CIDR": {get_param: flannel_network_cidr}
+            "$FLANNEL_NETWORK_SUBNETLEN": {get_param: flannel_network_subnetlen}
+            "$FLANNEL_BACKEND": {get_param: flannel_backend}
+            "$PORTAL_NETWORK_CIDR": {get_param: portal_network_cidr}
+            "$CLUSTER_SUBNET": {get_param: fixed_subnet}
+            "$ETCD_DISCOVERY_URL": {get_param: discovery_url}
+            "$WAIT_CURL": {get_attr: [master_wait_handle, curl_cli]}
+            "$NETWORK_DRIVER": {get_param: network_driver}
+            "$KUBE_API_PORT": {get_param: kubernetes_port}
+            "$TLS_DISABLED": {get_param: tls_disabled}
+            "$KUBE_VERSION": {get_param: kube_version}
+            "$BAY_UUID": {get_param: bay_uuid}
+            "$MAGNUM_URL": {get_param: magnum_url}
+            "$HTTP_PROXY": {get_param: http_proxy}
+            "$HTTPS_PROXY": {get_param: https_proxy}
+            "$NO_PROXY": {get_param: no_proxy}
+            "$TRUSTEE_USER_ID": {get_param: trustee_user_id}
+            "$TRUSTEE_PASSWORD": {get_param: trustee_password}
+            "$TRUST_ID": {get_param: trust_id}
+            "$AUTH_URL": {get_param: auth_url}
+            "$KUBE_API_PUBLIC_ADDRESS": {get_attr: [kube_master_floating, floating_ip_address]}
+            "$KUBE_API_PRIVATE_ADDRESS": {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+
+  configure_etcd:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/configure-etcd.yaml}
+
+  make_cert:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/make-cert.yaml}
+
+  write_network_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/write-network-config.yaml}
+
+  enable_network_service:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-network-service.yaml}
+
+  enable_kubelet:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kubelet-master.yaml}
+
+  enable_kube_apiserver:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-apiserver.yaml}
+
+  create_kube_namespace:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/create-kube-namespace.yaml}
+
+  enable_kube_proxy:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-proxy-master.yaml}
+
+  enable_kube_controller_manager:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-controller-manager.yaml}
+
+  enable_kube_scheduler:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-scheduler.yaml}
+
+  enable_kube_podmaster:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-kube-podmaster.yaml}
+
+  wc_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/wc-notify.yaml}
+
+  add_proxy:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/add-proxy.yaml}
+
+  kube_master_init:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: |
+            $write_heat_params
+            $make_cert
+            $add_proxy
+            $configure_etcd
+            $write_network_config
+            $enable_network_service
+            $enable_kubelet
+            $enable_kube_apiserver
+            $create_kube_namespace
+            $enable_kube_proxy
+            $enable_kube_podmaster
+            $enable_kube_controller_manager
+            $enable_kube_scheduler
+            $wc_notify
+            coreos:
+              units:
+                - name: "make-cert.service"
+                  command: "start"
+                - name: "add-proxy.service"
+                  command: "start"
+                - name: "configure-etcd.service"
+                  command: "start"
+                - name: "write-network-config.service"
+                  command: "start"
+                - name: "enable-network-service.service"
+                  command: "start"
+                - name: "enable-kubelet.service"
+                  command: "start"
+                - name: "enable-kube-apiserver.service"
+                  command: "start"
+                - name: "create-kube-namespace.service"
+                  command: "start"
+                - name: "enable-kube-proxy.service"
+                  command: "start"
+                - name: "enable-kube-controller-manager.service"
+                  command: "start"
+                - name: "enable-kube-scheduler.service"
+                  command: "start"
+                - name: "enable-kube-podmaster.service"
+                  command: "start"
+                - name: "wc-notify.service"
+                  command: "start"
+          params:
+            "$write_heat_params": {get_attr: [write_heat_params, config]}
+            "$make_cert": {get_attr: [make_cert, config]}
+            "$add_proxy": {get_attr: [add_proxy, config]}
+            "$configure_etcd": {get_attr: [configure_etcd, config]}
+            "$write_network_config": {get_attr: [write_network_config, config]}
+            "$enable_network_service": {get_attr: [enable_network_service, config]}
+            "$enable_kubelet": {get_attr: [enable_kubelet, config]}
+            "$enable_kube_apiserver": {get_attr: [enable_kube_apiserver, config]}
+            "$create_kube_namespace": {get_attr: [create_kube_namespace, config]}
+            "$enable_kube_proxy": {get_attr: [enable_kube_proxy, config]}
+            "$enable_kube_controller_manager": {get_attr: [enable_kube_controller_manager, config]}
+            "$enable_kube_scheduler": {get_attr: [enable_kube_scheduler, config]}
+            "$enable_kube_podmaster": {get_attr: [enable_kube_podmaster, config]}
+            "$wc_notify": {get_attr: [wc_notify, config]}
+
+  ######################################################################
+  #
+  # a single kubernetes master.
+  #
+
+  kube_master:
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: server_image}
+      flavor: {get_param: master_flavor}
+      key_name: {get_param: ssh_key_name}
+      user_data_format: RAW
+      user_data: {get_resource: kube_master_init}
+      networks:
+        - port: {get_resource: kube_master_eth0}
+
+  kube_master_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: fixed_network}
+      security_groups:
+        - {get_resource: secgroup_base}
+        - {get_resource: secgroup_kubernetes}
+      fixed_ips:
+        - subnet: {get_param: fixed_subnet}
+      allowed_address_pairs:
+        - ip_address: {get_param: flannel_network_cidr}
+      replacement_policy: AUTO
+
+  kube_master_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: kube_master_eth0}
+
+  api_pool_member:
+    type: Magnum::Optional::Neutron::PoolMember
+    properties:
+      pool_id: {get_param: api_pool_id}
+      address: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+      protocol_port: {get_param: kubernetes_port}
+
+  etcd_pool_member:
+    type: Magnum::Optional::Neutron::PoolMember
+    properties:
+      pool_id: {get_param: etcd_pool_id}
+      address: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+      protocol_port: 2379
+
+outputs:
+
+  kube_master_ip:
+    value: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+    description: >
+      This is the "private" IP address of the Kubernetes master node.
+
+  kube_master_external_ip:
+    value: {get_attr: [kube_master_floating, floating_ip_address]}
+    description: >
+      This is the "public" IP address of the Kubernetes master node.

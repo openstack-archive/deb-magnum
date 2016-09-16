@@ -18,6 +18,7 @@ Tests for `magnum` module.
 """
 
 import os
+from oslo_config import cfg
 import subprocess
 import tempfile
 import time
@@ -25,8 +26,14 @@ import time
 import fixtures
 from six.moves import configparser
 
+from heatclient import client as heatclient
+from k8sclient.client import api_client
+from k8sclient.client.apis import apiv_api
+from keystoneclient.v2_0 import client as ksclient
 from magnum.common.utils import rmtree_without_raise
+from magnum.i18n import _LI
 from magnum.tests.functional.common import base
+from magnum.tests.functional.common import utils
 from magnumclient.common.apiclient import exceptions
 from magnumclient.common import cliutils
 from magnumclient.v1 import client as v1client
@@ -53,6 +60,7 @@ class BaseMagnumClient(base.BaseMagnumTest):
         flavor_id = cliutils.env('FLAVOR_ID')
         master_flavor_id = cliutils.env('MASTER_FLAVOR_ID')
         keypair_id = cliutils.env('KEYPAIR_ID')
+        dns_nameserver = cliutils.env('DNS_NAMESERVER')
         copy_logs = cliutils.env('COPY_LOGS')
 
         config = configparser.RawConfigParser()
@@ -70,6 +78,8 @@ class BaseMagnumClient(base.BaseMagnumTest):
             master_flavor_id = master_flavor_id or config.get(
                 'magnum', 'master_flavor_id')
             keypair_id = keypair_id or config.get('magnum', 'keypair_id')
+            dns_nameserver = dns_nameserver or config.get(
+                'magnum', 'dns_nameserver')
             try:
                 copy_logs = copy_logs or config.get('magnum', 'copy_logs')
             except configparser.NoOptionError:
@@ -80,30 +90,43 @@ class BaseMagnumClient(base.BaseMagnumTest):
         cls.flavor_id = flavor_id
         cls.master_flavor_id = master_flavor_id
         cls.keypair_id = keypair_id
-        cls.copy_logs = bool(copy_logs)
+        cls.dns_nameserver = dns_nameserver
+        cls.copy_logs = str(copy_logs).lower() == 'true'
         cls.cs = v1client.Client(username=user,
                                  api_key=passwd,
                                  project_id=tenant_id,
                                  project_name=tenant,
                                  auth_url=auth_url,
-                                 service_type='container',
+                                 service_type='container-infra',
                                  region_name=region_name,
                                  magnum_url=magnum_url)
+        cls.keystone = ksclient.Client(username=user,
+                                       password=passwd,
+                                       tenant_name=tenant,
+                                       auth_url=auth_url)
+        token = cls.keystone.auth_token
+        heat_endpoint = cls.keystone.service_catalog.url_for(
+            service_type='orchestration')
+        cls.heat = heatclient.Client('1', token=token, endpoint=heat_endpoint)
 
     @classmethod
-    def _wait_on_status(cls, bay, wait_status, finish_status):
+    def _wait_on_status(cls, bay, wait_status, finish_status, timeout=6000):
         # Check status every 60 seconds for a total of 100 minutes
-        for i in range(100):
-            # sleep 1s to wait bay status changes, this will be useful for
-            # the first time we wait for the status, to avoid another 59s
-            time.sleep(1)
+
+        def _check_status():
             status = cls.cs.bays.get(bay.uuid).status
+            cls.LOG.debug("Bay status is %s" % status)
             if status in wait_status:
-                time.sleep(59)
+                return False
             elif status in finish_status:
-                break
+                return True
             else:
-                raise Exception("Unknown Status : %s" % status)
+                raise Exception("Unexpected Status: %s" % status)
+
+        # sleep 1s to wait bay status changes, this will be useful for
+        # the first time we wait for the status, to avoid another 59s
+        time.sleep(1)
+        utils.wait_for_condition(_check_status, interval=60, timeout=timeout)
 
     @classmethod
     def _create_baymodel(cls, name, **kwargs):
@@ -116,6 +139,8 @@ class BaseMagnumClient(base.BaseMagnumTest):
         volume_driver = kwargs.pop('volume_driver', 'cinder')
         labels = kwargs.pop('labels', {"K1": "V1", "K2": "V2"})
         tls_disabled = kwargs.pop('tls_disabled', False)
+        fixed_subnet = kwargs.pop('fixed_subnet', None)
+        server_type = kwargs.pop('server_type', 'vm')
 
         baymodel = cls.cs.baymodels.create(
             name=name,
@@ -127,9 +152,12 @@ class BaseMagnumClient(base.BaseMagnumTest):
             docker_volume_size=docker_volume_size,
             network_driver=network_driver,
             volume_driver=volume_driver,
+            dns_nameserver=cls.dns_nameserver,
             coe=coe,
             labels=labels,
             tls_disabled=tls_disabled,
+            fixed_subnet=fixed_subnet,
+            server_type=server_type,
             **kwargs)
         return baymodel
 
@@ -137,8 +165,7 @@ class BaseMagnumClient(base.BaseMagnumTest):
     def _create_bay(cls, name, baymodel_uuid):
         bay = cls.cs.bays.create(
             name=name,
-            baymodel_id=baymodel_uuid,
-            node_count=None,
+            baymodel_id=baymodel_uuid
         )
 
         return bay
@@ -157,21 +184,29 @@ class BaseMagnumClient(base.BaseMagnumTest):
         cls.cs.bays.delete(bay_uuid)
 
         try:
-            cls._wait_on_status(cls.bay,
-                                ["CREATE_COMPLETE",
-                                 "DELETE_IN_PROGRESS", "CREATE_FAILED"],
-                                ["DELETE_FAILED", "DELETE_COMPLETE"])
+            cls._wait_on_status(
+                cls.bay,
+                ["CREATE_COMPLETE", "DELETE_IN_PROGRESS", "CREATE_FAILED"],
+                ["DELETE_FAILED", "DELETE_COMPLETE"],
+                timeout=600
+            )
         except exceptions.NotFound:
             pass
         else:
             if cls._show_bay(cls.bay.uuid).status == 'DELETE_FAILED':
                 raise Exception("bay %s delete failed" % cls.bay.uuid)
 
+    @classmethod
+    def get_copy_logs(cls):
+        return cls.copy_logs
+
     def _wait_for_bay_complete(self, bay):
         self._wait_on_status(
             bay,
             [None, "CREATE_IN_PROGRESS"],
-            ["CREATE_FAILED", "CREATE_COMPLETE"])
+            ["CREATE_FAILED", "CREATE_COMPLETE"],
+            timeout=self.bay_complete_timeout
+        )
 
         if self.cs.bays.get(bay.uuid).status == 'CREATE_FAILED':
             raise Exception("bay %s created failed" % bay.uuid)
@@ -197,6 +232,11 @@ extendedKeyUsage = clientAuth
     ca_dir = None
     bay = None
     baymodel = None
+    key_file = None
+    cert_file = None
+    ca_file = None
+
+    bay_complete_timeout = 1800
 
     @classmethod
     def setUpClass(cls):
@@ -220,22 +260,57 @@ extendedKeyUsage = clientAuth
     def setUp(self):
         super(BayTest, self).setUp()
 
-        test_timeout = os.environ.get('OS_TEST_TIMEOUT', 0)
+        test_timeout = os.environ.get('OS_TEST_TIMEOUT', 60)
         try:
             test_timeout = int(test_timeout)
         except ValueError:
-            # If timeout value is invalid do not set a timeout.
-            test_timeout = 0
-        if test_timeout > 0:
-            self.useFixture(fixtures.Timeout(test_timeout, gentle=True))
+            # If timeout value is invalid, set a default timeout.
+            test_timeout = cfg.CONF.bay_heat.bay_create_timeout
+        if test_timeout <= 0:
+            test_timeout = cfg.CONF.bay_heat.bay_create_timeout
 
-        self.addOnException(
-            self.copy_logs_handler(
-                lambda: list(self.cs.bays.get(self.bay.uuid).node_addresses +
-                             self.cs.bays.get(self.bay.uuid).master_addresses),
-                self.baymodel.coe,
-                'default'))
+        self.useFixture(fixtures.Timeout(test_timeout, gentle=True))
+
+        if self.copy_logs:
+            self.addOnException(
+                self.copy_logs_handler(
+                    self._get_nodes,
+                    self.baymodel.coe,
+                    'default'))
         self._wait_for_bay_complete(self.bay)
+
+    def _get_nodes(self):
+        nodes = self._get_nodes_from_bay()
+        if not [x for x in nodes if x]:
+            self.LOG.info(_LI("the list of nodes from bay is empty"))
+            nodes = self._get_nodes_from_stack()
+            if not [x for x in nodes if x]:
+                self.LOG.info(_LI("the list of nodes from stack is empty"))
+        self.LOG.info(_LI("Nodes are: %s") % nodes)
+        return nodes
+
+    def _get_nodes_from_bay(self):
+        nodes = []
+        nodes.append(self.cs.bays.get(self.bay.uuid).master_addresses)
+        nodes.append(self.cs.bays.get(self.bay.uuid).node_addresses)
+        return nodes
+
+    def _get_nodes_from_stack(self):
+        nodes = []
+        stack = self.heat.stacks.get(self.bay.stack_id)
+        stack_outputs = stack.to_dict().get('outputs', [])
+        output_keys = []
+        if self.baymodel.coe == "kubernetes":
+            output_keys = ["kube_masters", "kube_minions"]
+        elif self.baymodel.coe == "swarm":
+            output_keys = ["swarm_masters", "swarm_nodes"]
+        elif self.baymodel.coe == "mesos":
+            output_keys = ["mesos_master", "mesos_slaves"]
+        for output in stack_outputs:
+            for key in output_keys:
+                if output['output_key'] == key:
+                    nodes.append(output['output_value'])
+        return nodes
 
     @classmethod
     def _create_tls_ca_files(cls, client_conf_contents):
@@ -281,3 +356,110 @@ extendedKeyUsage = clientAuth
         resp = cls.cs.certificates.get(cls.bay.uuid)
         with open(cls.ca_file, 'w') as f:
             f.write(resp.pem)
+
+
+class BaseK8sTest(BayTest):
+    coe = 'kubernetes'
+
+    @classmethod
+    def setUpClass(cls):
+        super(BaseK8sTest, cls).setUpClass()
+        cls.kube_api_url = cls.cs.bays.get(cls.bay.uuid).api_address
+        k8s_client = api_client.ApiClient(cls.kube_api_url,
+                                          key_file=cls.key_file,
+                                          cert_file=cls.cert_file,
+                                          ca_certs=cls.ca_file)
+        cls.k8s_api = apiv_api.ApivApi(k8s_client)
+
+    def setUp(self):
+        super(BaseK8sTest, self).setUp()
+        self.kube_api_url = self.cs.bays.get(self.bay.uuid).api_address
+        k8s_client = api_client.ApiClient(self.kube_api_url,
+                                          key_file=self.key_file,
+                                          cert_file=self.cert_file,
+                                          ca_certs=self.ca_file)
+        self.k8s_api = apiv_api.ApivApi(k8s_client)
+        # TODO(coreypobrien) https://bugs.launchpad.net/magnum/+bug/1551824
+        utils.wait_for_condition(self._is_api_ready, 5, 600)
+
+    def _is_api_ready(self):
+        try:
+            self.k8s_api.list_namespaced_node()
+            self.LOG.info(_LI("API is ready."))
+            return True
+        except Exception:
+            self.LOG.info(_LI("API is not ready yet."))
+            return False
+
+    def test_pod_apis(self):
+        pod_manifest = {'apiVersion': 'v1',
+                        'kind': 'Pod',
+                        'metadata': {'color': 'blue', 'name': 'test'},
+                        'spec': {'containers': [{'image': 'dockerfile/redis',
+                                 'name': 'redis'}]}}
+
+        resp = self.k8s_api.create_namespaced_pod(body=pod_manifest,
+                                                  namespace='default')
+        self.assertEqual('test', resp.metadata.name)
+        self.assertTrue(resp.status.phase)
+
+        resp = self.k8s_api.read_namespaced_pod(name='test',
+                                                namespace='default')
+        self.assertEqual('test', resp.metadata.name)
+        self.assertTrue(resp.status.phase)
+
+        resp = self.k8s_api.delete_namespaced_pod(name='test', body={},
+                                                  namespace='default')
+
+    def test_service_apis(self):
+        service_manifest = {'apiVersion': 'v1',
+                            'kind': 'Service',
+                            'metadata': {'labels': {'name': 'frontend'},
+                                         'name': 'frontend',
+                                         'resourceversion': 'v1'},
+                            'spec': {'ports': [{'port': 80,
+                                                'protocol': 'TCP',
+                                                'targetPort': 80}],
+                                     'selector': {'name': 'frontend'}}}
+
+        resp = self.k8s_api.create_namespaced_service(body=service_manifest,
+                                                      namespace='default')
+        self.assertEqual('frontend', resp.metadata.name)
+        self.assertTrue(resp.status)
+
+        resp = self.k8s_api.read_namespaced_service(name='frontend',
+                                                    namespace='default')
+        self.assertEqual('frontend', resp.metadata.name)
+        self.assertTrue(resp.status)
+
+        resp = self.k8s_api.delete_namespaced_service(name='frontend',
+                                                      namespace='default')
+
+    def test_replication_controller_apis(self):
+        rc_manifest = {
+            'apiVersion': 'v1',
+            'kind': 'ReplicationController',
+            'metadata': {'labels': {'name': 'frontend'},
+                         'name': 'frontend'},
+            'spec': {'replicas': 2,
+                     'selector': {'name': 'frontend'},
+                     'template': {'metadata': {
+                         'labels': {'name': 'frontend'}},
+                         'spec': {'containers': [{
+                             'image': 'nginx',
+                             'name': 'nginx',
+                             'ports': [{'containerPort': 80,
+                                        'protocol': 'TCP'}]}]}}}}
+
+        resp = self.k8s_api.create_namespaced_replication_controller(
+            body=rc_manifest, namespace='default')
+        self.assertEqual('frontend', resp.metadata.name)
+        self.assertEqual(2, resp.spec.replicas)
+
+        resp = self.k8s_api.read_namespaced_replication_controller(
+            name='frontend', namespace='default')
+        self.assertEqual('frontend', resp.metadata.name)
+        self.assertEqual(2, resp.spec.replicas)
+
+        resp = self.k8s_api.delete_namespaced_replication_controller(
+            name='frontend', body={}, namespace='default')

@@ -58,6 +58,8 @@ MAGNUM_SERVICE_PROTOCOL=${MAGNUM_SERVICE_PROTOCOL:-$SERVICE_PROTOCOL}
 
 MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD=${MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD:-secret}
 
+MAGNUM_SWIFT_REGISTRY_CONTAINER=${MAGNUM_SWIFT_REGISTRY_CONTAINER:-docker_registry}
+
 # Support entry points installation of console scripts
 if [[ -d $MAGNUM_DIR/bin ]]; then
     MAGNUM_BIN_DIR=$MAGNUM_DIR/bin
@@ -65,9 +67,7 @@ else
     MAGNUM_BIN_DIR=$(get_python_exec_prefix)
 fi
 
-if is_service_enabled ir-api; then
-    MAGNUM_CONFIGURE_IPTABLES=${MAGNUM_CONFIGURE_IPTABLES:-False}
-fi
+MAGNUM_CONFIGURE_IPTABLES=${MAGNUM_CONFIGURE_IPTABLES:-True}
 
 # Functions
 # ---------
@@ -75,7 +75,7 @@ fi
 # Test if any magnum services are enabled
 # is_magnum_enabled
 function is_magnum_enabled {
-    [[ ,${ENABLED_SERVICES} =~ ,"m-" ]] && return 0
+    [[ ,${ENABLED_SERVICES} =~ ,"magnum-" ]] && return 0
     return 1
 }
 # cleanup_magnum() - Remove residual data files, anything left over from previous
@@ -113,7 +113,7 @@ function create_magnum_accounts {
     if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
 
         local magnum_service=$(get_or_create_service "magnum" \
-            "container" "Magnum Container Service")
+            "container-infra" "Container Infrastructure Management Service")
         get_or_create_endpoint $magnum_service \
             "$REGION_NAME" \
             "$MAGNUM_SERVICE_PROTOCOL://$MAGNUM_SERVICE_HOST:$MAGNUM_SERVICE_PORT/v1" \
@@ -139,13 +139,24 @@ function create_magnum_conf {
 
     iniset $MAGNUM_CONF oslo_policy policy_file $MAGNUM_POLICY_JSON
 
+    iniset $MAGNUM_CONF keystone_auth auth_type password
+    iniset $MAGNUM_CONF keystone_auth username magnum
+    iniset $MAGNUM_CONF keystone_auth password $SERVICE_PASSWORD
+    iniset $MAGNUM_CONF keystone_auth project_name $SERVICE_PROJECT_NAME
+    iniset $MAGNUM_CONF keystone_auth project_domain_id default
+    iniset $MAGNUM_CONF keystone_auth user_domain_id default
+
+    # FIXME(pauloewerton): keystone_authtoken section is deprecated. Remove it
+    # after deprecation period.
     iniset $MAGNUM_CONF keystone_authtoken admin_user magnum
     iniset $MAGNUM_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
     iniset $MAGNUM_CONF keystone_authtoken admin_tenant_name $SERVICE_PROJECT_NAME
 
     configure_auth_token_middleware $MAGNUM_CONF magnum $MAGNUM_AUTH_CACHE_DIR
 
-    iniset $MAGNUM_CONF keystone_authtoken auth_uri $KEYSTONE_SERVICE_URI/v3
+    iniset $MAGNUM_CONF keystone_auth auth_url $KEYSTONE_SERVICE_URI/v3
+    iniset $MAGNUM_CONF keystone_authtoken auth_uri \
+           ${KEYSTONE_SERVICE_PROTOCOL}://${HOST_IP}:${KEYSTONE_SERVICE_PORT}/v3
     iniset $MAGNUM_CONF keystone_authtoken auth_version v3
 
     if is_fedora || is_suse; then
@@ -188,13 +199,7 @@ function create_magnum_conf {
     if is_service_enabled barbican; then
         iniset $MAGNUM_CONF certificates cert_manager_type "barbican"
     else
-        MAGNUM_LOCAL_CERT_DIR=${MAGNUM_LOCAL_CERT_DIR:-/var/lib/magnum/certificates/}
-        if [[ ! -d $MAGNUM_LOCAL_CERT_DIR ]]; then
-            sudo mkdir -p $MAGNUM_LOCAL_CERT_DIR
-            sudo chown $STACK_USER $MAGNUM_LOCAL_CERT_DIR
-        fi
-        iniset $MAGNUM_CONF certificates storage_path "$MAGNUM_LOCAL_CERT_DIR"
-        iniset $MAGNUM_CONF certificates cert_manager_type "local"
+        iniset $MAGNUM_CONF certificates cert_manager_type "x509keypair"
     fi
 
     trustee_domain_id=$(get_or_create_domain magnum 'Owns users and projects created by magnum')
@@ -203,10 +208,15 @@ function create_magnum_conf {
               --os-identity-api-version 3 role add \
               --user $trustee_domain_admin_id --domain $trustee_domain_id \
               admin
-    iniset $MAGNUM_CONF trust trustee_domain_id $trustee_domain_id
-    iniset $MAGNUM_CONF trust trustee_domain_admin_id $trustee_domain_admin_id
+    iniset $MAGNUM_CONF trust trustee_domain_name magnum
+    iniset $MAGNUM_CONF trust trustee_domain_admin_name trustee_domain_admin
     iniset $MAGNUM_CONF trust trustee_domain_admin_password $MAGNUM_TRUSTEE_DOMAIN_ADMIN_PASSWORD
     iniset $MAGNUM_CONF cinder_client region_name $REGION_NAME
+
+    if is_service_enabled swift; then
+        iniset $MAGNUM_CONF docker_registry swift_region $REGION_NAME
+        iniset $MAGNUM_CONF docker_registry swift_registry_container $MAGNUM_SWIFT_REGISTRY_CONTAINER
+    fi
 }
 
 function create_api_paste_conf {
@@ -215,9 +225,9 @@ function create_api_paste_conf {
 }
 
 function update_heat_policy {
-    # enable stacks globel_index search so that magnum can use
+    # enable stacks global_index search so that magnum can use
     # list(global_tenant=True)
-    sed -i 's/\("stacks:global_index":\).*$/\1 "role:admin",/' $HEAT_CONF_DIR/policy.json
+    sed -i 's/\("stacks:global_index":\).*$/\1 "rule:context_is_admin",/' $HEAT_CONF_DIR/policy.json
 }
 
 # create_magnum_cache_dir() - Part of the init_magnum() process
@@ -232,7 +242,7 @@ function create_magnum_cache_dir {
 # init_magnum() - Initialize databases, etc.
 function init_magnum {
     # Only do this step once on the API node for an entire cluster.
-    if is_service_enabled $DATABASE_BACKENDS && is_service_enabled m-api; then
+    if is_service_enabled $DATABASE_BACKENDS && is_service_enabled magnum-api; then
         # (Re)create magnum database
         recreate_database magnum
 
@@ -246,16 +256,40 @@ function init_magnum {
 function magnum_register_image {
     local magnum_image_property="--property os_distro="
 
-    local atomic="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -o 'atomic' || true;)"
-    if [ ! -z $atomic ]; then
+    local atomic="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -io 'atomic' || true;)"
+    if [ ! -z "$atomic" ]; then
         magnum_image_property=$magnum_image_property"fedora-atomic"
     fi
-    local ubuntu="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -o "ubuntu" || ture;)"
-    if [ ! -z $ubuntu ]; then
+    local ubuntu="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -io "ubuntu" || true;)"
+    if [ ! -z "$ubuntu" ]; then
         magnum_image_property=$magnum_image_property"ubuntu"
     fi
+    local coreos="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -io "coreos" || true;)"
+    if [ ! -z "$coreos" ]; then
+        magnum_image_property=$magnum_image_property"coreos"
+    fi
+    # os_distro property for fedora ironic image
+    local fedora_ironic="$(echo $MAGNUM_GUEST_IMAGE_URL | grep -i "ironic" \
+                                                        | grep -io "fedora" || true;)"
+    if [ ! -z "$fedora_ironic" ]; then
+        magnum_image_property=$magnum_image_property"fedora"
+    fi
 
-    openstack --os-url $GLANCE_SERVICE_PROTOCOL://$GLANCE_HOSTPORT --os-image-api-version 1 image set $(basename "$MAGNUM_GUEST_IMAGE_URL" ".qcow2") $magnum_image_property
+    # get the image name
+    local image_filename=$(basename "$MAGNUM_GUEST_IMAGE_URL")
+    local image_name=""
+    for extension in "tgz" "img" "qcow2" "iso" "vhd" "vhdx" "tar.gz" "img.gz" "img.bz2" "vhd.gz" "vhdx.gz"
+    do
+        if [ $(expr match "${image_filename}" ".*\.${extension}$") -ne 0 ]; then
+            image_name=$(basename "$image_filename" ".${extension}")
+            break
+        fi
+    done
+    if [ -z ${image_name} ]; then
+        echo "Unknown image extension in $image_filename, supported extensions: tgz, img, qcow2, iso, vhd, vhdx, tar.gz, img.gz, img.bz2, vhd.gz, vhdx.gz"; false
+    fi
+
+    openstack --os-url $GLANCE_SERVICE_PROTOCOL://$GLANCE_HOSTPORT --os-image-api-version 1 image set $image_name $magnum_image_property
 }
 
 # install_magnumclient() - Collect source and prepare
@@ -282,7 +316,7 @@ function start_magnum_api {
         service_protocol="http"
     fi
 
-    run_process m-api "$MAGNUM_BIN_DIR/magnum-api"
+    run_process magnum-api "$MAGNUM_BIN_DIR/magnum-api"
     echo "Waiting for magnum-api to start..."
     if ! wait_for_service $SERVICE_TIMEOUT $service_protocol://$MAGNUM_SERVICE_HOST:$service_port; then
         die $LINENO "magnum-api did not start"
@@ -302,8 +336,9 @@ function configure_iptables {
         ROUTE_TO_INTERNET=$(ip route get 8.8.8.8)
         OBOUND_DEV=$(echo ${ROUTE_TO_INTERNET#*dev} | awk '{print $1}')
         sudo iptables -t nat -A POSTROUTING -o $OBOUND_DEV -j MASQUERADE
-        # bay nodes will access m-api (port $MAGNUM_SERVICE_PORT) to get CA certificate.
+        # bay nodes will access magnum-api (port $MAGNUM_SERVICE_PORT) to get CA certificate.
         sudo iptables -I INPUT -d $HOST_IP -p tcp --dport $MAGNUM_SERVICE_PORT -j ACCEPT || true
+        sudo iptables -I INPUT -d $HOST_IP -p tcp --dport $KEYSTONE_SERVICE_PORT -j ACCEPT || true
     fi
 }
 
@@ -313,12 +348,12 @@ function start_magnum {
 
     # ``run_process`` checks ``is_service_enabled``, it is not needed here
     start_magnum_api
-    run_process m-cond "$MAGNUM_BIN_DIR/magnum-conductor"
+    run_process magnum-cond "$MAGNUM_BIN_DIR/magnum-conductor"
 }
 
 # stop_magnum() - Stop running processes (non-screen)
 function stop_magnum {
-    for serv in m-api m-cond; do
+    for serv in magnum-api magnum-cond; do
         stop_process $serv
     done
 }

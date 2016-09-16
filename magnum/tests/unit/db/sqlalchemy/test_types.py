@@ -13,8 +13,8 @@
 """Tests for custom SQLAlchemy types via Magnum DB."""
 
 from oslo_db import exception as db_exc
+from oslo_utils import uuidutils
 
-from magnum.common import utils as magnum_utils
 import magnum.db.sqlalchemy.api as sa_api
 from magnum.db.sqlalchemy import models
 from magnum.tests.unit.db import base
@@ -23,40 +23,47 @@ from magnum.tests.unit.db import base
 class SqlAlchemyCustomTypesTestCase(base.DbTestCase):
 
     def test_JSONEncodedDict_default_value(self):
-        # Create pod w/o labels
-        pod1_id = magnum_utils.generate_uuid()
-        self.dbapi.create_pod({'uuid': pod1_id})
-        pod1 = sa_api.model_query(models.Pod).filter_by(uuid=pod1_id).one()
-        self.assertEqual({}, pod1.labels)
+        # Create baymodel w/o labels
+        baymodel1_id = uuidutils.generate_uuid()
+        self.dbapi.create_baymodel({'uuid': baymodel1_id})
+        baymodel1 = sa_api.model_query(
+            models.BayModel).filter_by(uuid=baymodel1_id).one()
+        self.assertEqual({}, baymodel1.labels)
 
-        # Create pod with labels
-        pod2_id = magnum_utils.generate_uuid()
-        self.dbapi.create_pod({'uuid': pod2_id, 'labels': {'bar': 'foo'}})
-        pod2 = sa_api.model_query(models.Pod).filter_by(uuid=pod2_id).one()
-        self.assertEqual('foo', pod2.labels['bar'])
+        # Create baymodel with labels
+        baymodel2_id = uuidutils.generate_uuid()
+        self.dbapi.create_baymodel(
+            {'uuid': baymodel2_id, 'labels': {'bar': 'foo'}})
+        baymodel2 = sa_api.model_query(
+            models.BayModel).filter_by(uuid=baymodel2_id).one()
+        self.assertEqual('foo', baymodel2.labels['bar'])
 
     def test_JSONEncodedDict_type_check(self):
         self.assertRaises(db_exc.DBError,
-                          self.dbapi.create_pod,
+                          self.dbapi.create_baymodel,
                           {'labels':
                            ['this is not a dict']})
 
     def test_JSONEncodedList_default_value(self):
-        # Create pod w/o images
-        pod1_id = magnum_utils.generate_uuid()
-        self.dbapi.create_pod({'uuid': pod1_id})
-        pod1 = sa_api.model_query(models.Pod).filter_by(uuid=pod1_id).one()
-        self.assertEqual([], pod1.images)
+        # Create bay w/o master_addresses
+        bay1_id = uuidutils.generate_uuid()
+        self.dbapi.create_bay({'uuid': bay1_id})
+        bay1 = sa_api.model_query(
+            models.Bay).filter_by(uuid=bay1_id).one()
+        self.assertEqual([], bay1.master_addresses)
 
-        # Create pod with images
-        pod2_id = magnum_utils.generate_uuid()
-        self.dbapi.create_pod({'uuid': pod2_id,
-                               'images': ['myimage1', 'myimage2']})
-        pod2 = sa_api.model_query(models.Pod).filter_by(uuid=pod2_id).one()
-        self.assertEqual(['myimage1', 'myimage2'], pod2.images)
+        # Create bay with master_addresses
+        bay2_id = uuidutils.generate_uuid()
+        self.dbapi.create_bay({'uuid': bay2_id,
+                              'master_addresses': ['mymaster_address1',
+                                                   'mymaster_address2']})
+        bay2 = sa_api.model_query(
+            models.Bay).filter_by(uuid=bay2_id).one()
+        self.assertEqual(['mymaster_address1', 'mymaster_address2'],
+                         bay2.master_addresses)
 
     def test_JSONEncodedList_type_check(self):
         self.assertRaises(db_exc.DBError,
-                          self.dbapi.create_pod,
-                          {'images':
+                          self.dbapi.create_bay,
+                          {'master_addresses':
                            {'this is not a list': 'test'}})

@@ -16,23 +16,26 @@ debugging unit tests and gate tests.
 Failure symptoms
 ================
 
-My bay-create takes a really long time
-  If you are using devstack on a small VM, bay-create will take a long
+My cluster-create takes a really long time
+  If you are using devstack on a small VM, cluster-create will take a long
   time and may eventually fail because of insufficient resources.
   Another possible reason is that a process on one of the nodes is hung
   and heat is still waiting on the signal.  In this case, it will eventually
   fail with a timeout, but since heat has a long default timeout, you can
   look at the `heat stacks`_ and check the WaitConditionHandle resources.
 
-Kubernetes bay-create fails
+My cluster-create fails with error: "Failed to create trustee XXX in domain XXX"
+  Check the `trustee for cluster`_
+
+Kubernetes cluster-create fails
   Check the `heat stacks`_, log into the master nodes and check the
   `Kubernetes services`_ and `etcd service`_.
 
-Swarm bay-create fails
+Swarm cluster-create fails
   Check the `heat stacks`_, log into the master nodes and check the `Swarm
   services`_ and `etcd service`_.
 
-Mesos bay-create fails
+Mesos cluster-create fails
   Check the `heat stacks`_, log into the master nodes and check the `Mesos
   services`_.
 
@@ -40,20 +43,20 @@ I get the error "Timed out waiting for a reply" when deploying a pod
   Verify the `Kubernetes services`_ and `etcd service`_ are running on the
   master nodes.
 
-I deploy pods on Kubernetes bay but the status stays "Pending"
+I deploy pods on Kubernetes cluster but the status stays "Pending"
   The pod status is "Pending" while the Docker image is being downloaded,
   so if the status does not change for a long time, log into the minion
   node and check for `Cluster internet access`_.
 
-I deploy pods and services on Kubernetes bay but the app is not working
+I deploy pods and services on Kubernetes cluster but the app is not working
   The pods and services are running and the status looks correct, but
   if the app is performing communication between pods through services,
   verify `Kubernetes networking`_.
 
-Swarm bay is created successfully but I cannot deploy containers
+Swarm cluster is created successfully but I cannot deploy containers
   Check the `Swarm services`_ and `etcd service`_ on the master nodes.
 
-Mesos bay is created successfully but I cannot deploy containers on Marathon
+Mesos cluster is created successfully but I cannot deploy containers on Marathon
   Check the `Mesos services`_ on the master node.
 
 I get a "Protocol violation" error when deploying a container
@@ -61,7 +64,7 @@ I get a "Protocol violation" error when deploying a container
   kube-apiserver is running to accept the request.
   Check `TLS`_ and `Barbican service`_.
 
-My bay-create fails with a resource error on docker_volume
+My cluster-create fails with a resource error on docker_volume
   Check for available volume space on Cinder and the `request volume
   size`_ in the heat template.
   Run "nova volume-list" to check the volume status.
@@ -75,17 +78,17 @@ Heat stacks
 -----------
 *To be filled in*
 
-A bay is deployed by a set of heat stacks:  one top level stack and several
-nested stack.  The stack names are prefixed with the bay name and the nested
-stack names contain descriptive internal names like *kube_masters*,
+A cluster is deployed by a set of heat stacks:  one top level stack and several
+nested stack.  The stack names are prefixed with the cluster name and the
+nested stack names contain descriptive internal names like *kube_masters*,
 *kube_minions*.
 
-To list the status of all the stacks for a bay:
+To list the status of all the stacks for a cluster:
 
-    heat stack-list -n | grep *bay-name*
+    heat stack-list -n | grep *cluster-name*
 
-If the bay has failed, then one or more of the heat stacks would have failed.
-From the stack list above, look for the stacks that failed, then
+If the cluster has failed, then one or more of the heat stacks would have
+failed. From the stack list above, look for the stacks that failed, then
 look for the particular resource(s) that failed in the failed stack by:
 
     heat resource-list *failed-stack-name* | grep "FAILED"
@@ -105,6 +108,74 @@ services`_, `Swarm services`_ or `Mesos services`_.  If the failure is in
 other scripts, look for them as `Heat software resource scripts`_.
 
 
+Trustee for cluster
+-------------------
+When a user creates a cluster, Magnum will dynamically create a service account
+for the cluster. The service account will be used by the cluster to
+access the OpenStack services (i.e. Neutron, Swift, etc.). A trust relationship
+will be created between the user who created the cluster (the "trustor") and
+the service account created for the cluster (the "trustee"). For details,
+please refer
+<http://git.openstack.org/cgit/openstack/magnum/tree/specs/create-trustee-user-for-each-cluster.rst>`_.
+
+If Magnum fails to create the trustee, check the magnum config file (usually
+in /etc/magnum/magnum.conf). Make sure 'trustee_*' and 'auth_uri' are set and
+their values are correct:
+
+    [keystone_authtoken]
+    auth_uri = http://controller:5000/v3
+    ...
+
+    [trust]
+    trustee_domain_admin_password = XXX
+    trustee_domain_admin_id = XXX
+    trustee_domain_id = XXX
+
+If the 'trust' group is missing, you might need to create the trustee domain
+and the domain admin:
+
+.. code-block:: bash
+
+    source /opt/stack/devstack/accrc/admin/admin
+    export OS_IDENTITY_API_VERSION=3
+    unset OS_AUTH_TYPE
+    openstack domain create magnum
+    openstack user create trustee_domain_admin --password=secret \
+        --domain=magnum
+    openstack role add --user=trustee_domain_admin --domain=magnum admin
+
+    source /opt/stack/devstack/functions
+    export MAGNUM_CONF=/etc/magnum/magnum.conf
+    iniset $MAGNUM_CONF trust trustee_domain_id \
+        $(openstack domain show magnum | awk '/ id /{print $4}')
+    iniset $MAGNUM_CONF trust trustee_domain_admin_id \
+        $(openstack user show trustee_domain_admin | awk '/ id /{print $4}')
+    iniset $MAGNUM_CONF trust trustee_domain_admin_password secret
+
+Then, restart magnum-api and magnum-cond to pick up the new configuration.
+If the problem still exists, you might want to manually verify your domain
+admin credential to ensure it has the right privilege. To do that, run the
+script below with the credentials replaced. If it fails, that means the
+credential you provided is invalid.
+
+.. code-block:: python
+
+    from keystoneauth1.identity import v3 as ka_v3
+    from keystoneauth1 import session as ka_session
+    from keystoneclient.v3 import client as kc_v3
+
+    auth = ka_v3.Password(
+        auth_url=YOUR_AUTH_URI,
+        user_id=YOUR_TRUSTEE_DOMAIN_ADMIN_ID,
+        domain_id=YOUR_TRUSTEE_DOMAIN_ID,
+        password=YOUR_TRUSTEE_DOMAIN_ADMIN_PASSWORD)
+    )
+    session = ka_session.Session(auth=auth)
+    domain_admin_client = kc_v3.Client(session=session)
+    user = domain_admin_client.users.create(
+        name='anyname',
+        password='anypass')
+
 
 TLS
 ---
@@ -122,7 +193,7 @@ The nodes for Kubernetes, Swarm and Mesos are connected to a private
 Neutron network, so to provide access to the external internet, a router
 connects the private network to a public network.  With devstack, the
 default public network is "public", but this can be replaced by the
-parameter "external-network-id" in the bay model.  The "public" network
+parameter "external-network-id" in the ClusterTemplate.  The "public" network
 with devstack is actually not a real external network, so it is in turn
 routed to the network interface of the host for devstack.  This is
 configured in the file local.conf with the variable PUBLIC_INTERFACE,
@@ -140,19 +211,13 @@ works in your case)::
 
     ping 8.8.8.8
 
-**Note:** On the fedora-21-atomic-5 image, ping does not work because
-of a known atomic bug.  You can work around this problem by::
-
-    cp /usr/bin/ping .
-    sudo ./ping 8.8.8.8
-
 If the ping fails, there is no route to the external internet.
 Check the following:
 
 - Is PUBLIC_INTERFACE in devstack/local.conf the correct network
   interface?  Does this interface have a route to the external internet?
-- If "external-network-id" is specified in the bay model, does this network
-  have a route to the external internet?
+- If "external-network-id" is specified in the ClusterTemplate, does this
+  network have a route to the external internet?
 - Is your devstack environment behind a firewall?  This can be the case for some
   enterprises or countries.  In this case, consider using a `proxy server
   <https://github.com/openstack/magnum/blob/master/doc/source/magnum-proxy.rst>`_.
@@ -177,9 +242,9 @@ If the name lookup fails, check the following:
 - Is the DNS entry correct in the subnet?  Try "neutron subnet-show
   <subnet-id>" for the private subnet and check dns_nameservers.
   The IP should be either the default public DNS 8.8.8.8 or the value
-  specified by "dns-nameserver" in the bay model.
+  specified by "dns-nameserver" in the ClusterTemplate.
 - If you are using your own DNS server by specifying "dns-nameserver"
-  in the bay model, is it reachable and working?
+  in the ClusterTemplate, is it reachable and working?
 - More help on `DNS troubleshooting <http://docs.openstack.org/openstack-ops/content/network_troubleshooting.html#debugging_dns_issues>`_.
 
 
@@ -200,12 +265,12 @@ the key:value may not be replicated correctly.  In this case, use the
 following steps to verify the inter-pods networking and pinpoint problems.
 
 Since the steps are specific to the network drivers, refer to the
-particular driver being used for the bay.
+particular driver being used for the cluster.
 
 Using Flannel as network driver
 ...............................
 
-Flannel is the default network driver for Kubernetes bays.  Flannel is
+Flannel is the default network driver for Kubernetes clusters.  Flannel is
 an overlay network that runs on top of the neutron network.  It works by
 encapsulating the messages between pods and forwarding them to the
 correct node that hosts the target pod.
@@ -451,15 +516,15 @@ Running Flannel
 
 When deploying a COE, Flannel is available as a network driver for
 certain COE type.  Magnum currently supports Flannel for a Kubernetes
-or Swarm bay.
+or Swarm cluster.
 
-Flannel provides a flat network space for the containers in the bay:
+Flannel provides a flat network space for the containers in the cluster:
 they are allocated IP in this network space and they will have connectivity
 to each other.  Therefore, if Flannel fails, some containers will not
-be able to access services from other containers in the bay.  This can be
+be able to access services from other containers in the cluster.  This can be
 confirmed by running *ping* or *curl* from one container to another.
 
-The Flannel daemon is run as a systemd service on each node of the bay.
+The Flannel daemon is run as a systemd service on each node of the cluster.
 To check Flannel, run on each node::
 
     sudo service flanneld status
@@ -508,12 +573,13 @@ Check the following:
     }
 
   where the values for the parameters must match the corresponding
-  parameters from the bay model.
+  parameters from the ClusterTemplate.
 
   Magnum also loads this configuration into etcd, therefore, verify
   the configuration in etcd by running *etcdctl* on the master nodes::
 
-    etcdctl get /coreos.com/network/config
+    . /etc/sysconfig/flanneld
+    etcdctl get $FLANNEL_ETCD_KEY/config
 
 - Each node is allocated a segment of the network space.  Check
   for this segment on each node by::
@@ -525,17 +591,18 @@ Check the following:
   *etcdctl* on the master node to query the network segment associated
   with each node::
 
-    for s in `etcdctl ls /coreos.com/network/subnets`
+    . /etc/sysconfig/flanneld
+    for s in `etcdctl ls $FLANNEL_ETCD_KEY/subnets`
     do
     echo $s
     etcdctl get $s
     done
 
-    /coreos.com/network/subnets/10.100.14.0-24
+    /atomic.io/network/subnets/10.100.14.0-24
     {"PublicIP":"10.0.0.5"}
-    /coreos.com/network/subnets/10.100.61.0-24
+    /atomic.io/network/subnets/10.100.61.0-24
     {"PublicIP":"10.0.0.6"}
-    /coreos.com/network/subnets/10.100.92.0-24
+    /atomic.io/network/subnets/10.100.92.0-24
     {"PublicIP":"10.0.0.7"}
 
   Alternatively, you can read the full record in ectd by::

@@ -27,7 +27,7 @@ PRIVATE_KEY=
 
 echo "If private key is specified, save to temp and use that; else, use default"
 if [[ "$KEYPAIR" == "default" ]]; then
-    PRIVATE_KEY="~/.ssh/id_rsa"
+    PRIVATE_KEY=$(readlink -f ~/.ssh/id_rsa)
 else
     PRIVATE_KEY="$(mktemp id_rsa.$SSH_IP.XXX)"
     echo -en "$KEYPAIR" > $PRIVATE_KEY
@@ -43,12 +43,13 @@ function remote_exec {
 mkdir -p $LOG_PATH
 
 if [[ "$COE" == "kubernetes" ]]; then
-    SSH_USER=minion
+    SSH_USER=fedora
     remote_exec $SSH_USER "sudo systemctl --full list-units --no-pager" systemctl_list_units.log
     remote_exec $SSH_USER "sudo journalctl -u cloud-config --no-pager" cloud-config.log
     remote_exec $SSH_USER "sudo journalctl -u cloud-final --no-pager" cloud-final.log
     remote_exec $SSH_USER "sudo journalctl -u cloud-init-local --no-pager" cloud-init-local.log
     remote_exec $SSH_USER "sudo journalctl -u cloud-init --no-pager" cloud-init.log
+    remote_exec $SSH_USER "sudo cat /var/log/cloud-init-output.log" cloud-init-output.log
     remote_exec $SSH_USER "sudo journalctl -u kubelet --no-pager" kubelet.log
     remote_exec $SSH_USER "sudo journalctl -u kube-proxy --no-pager" kube-proxy.log
     remote_exec $SSH_USER "sudo journalctl -u etcd --no-pager" etcd.log
@@ -71,6 +72,8 @@ if [[ "$COE" == "kubernetes" ]]; then
     remote_exec $SSH_USER "sudo ip a" ipa.log
     remote_exec $SSH_USER "sudo netstat -an" netstat.log
     remote_exec $SSH_USER "sudo df -h" dfh.log
+    remote_exec $SSH_USER "sudo journalctl -u wc-notify --no-pager" wc-notify.log
+    remote_exec $SSH_USER "cat /etc/sysconfig/heat-params" heat-params
 elif [[ "$COE" == "swarm" ]]; then
     SSH_USER=fedora
     remote_exec $SSH_USER "sudo systemctl --full list-units --no-pager" systemctl_list_units.log
@@ -97,6 +100,7 @@ elif [[ "$COE" == "swarm" ]]; then
     remote_exec $SSH_USER "sudo ip a" ipa.log
     remote_exec $SSH_USER "sudo netstat -an" netstat.log
     remote_exec $SSH_USER "sudo df -h" dfh.log
+    remote_exec $SSH_USER "cat /etc/sysconfig/heat-params" heat-params
 else
     echo "ERROR: Unknown COE '${COE}'"
     EXIT_CODE=1

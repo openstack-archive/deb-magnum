@@ -28,12 +28,41 @@ function create_test_data {
     # a baymodel, bay and a pod
 
     coe=$1
-    local image_name="fedora-21-atomic"
+    special=$2
     if [ $coe == 'mesos' ]; then
-        image_name="ubuntu-14.04"
+        local image_name="ubuntu-14.04"
+        local container_format="bare"
+    elif [ $coe == 'k8s-coreos' ]; then
+        local image_name="coreos"
+        local container_format="bare"
+    elif [ "${coe}${special}" == 'k8s-ironic' ]; then
+        local bm_flavor_id=$(openstack flavor show baremetal -f value -c id)
+        die_if_not_set $LINENO bm_flavor_id "Failed to get id of baremetal flavor"
+
+        # NOTE(yuanying): Workaround fix for ironic issue
+        # cf. https://bugs.launchpad.net/ironic/+bug/1596421
+        echo "alter table ironic.nodes modify instance_info LONGTEXT;" | mysql -uroot -p${MYSQL_PASSWORD} ironic
+        # NOTE(yuanying): Ironic instances need to connect to Internet
+        neutron subnet-update private-subnet --dns-nameserver 8.8.8.8
+
+        local container_format="ami"
+    else
+        local image_name="atomic"
+        local container_format="bare"
     fi
+
+    # if we have the MAGNUM_IMAGE_NAME setting, use it instead
+    # of the default one. In combination with MAGNUM_GUEST_IMAGE_URL
+    # setting, it allows to perform testing on custom images.
+    image_name=${MAGNUM_IMAGE_NAME:-$image_name}
+
     export NIC_ID=$(neutron net-show public | awk '/ id /{print $4}')
-    export IMAGE_ID=$(glance --os-image-api-version 1 image-list | grep $image_name | awk '{print $2}')
+
+    # We need to filter by container_format to get the appropriate
+    # image. Specifically, when we provide kernel and ramdisk images
+    # we need to select the 'ami' image. Otherwise, when we have
+    # qcow2 images, the format is 'bare'.
+    export IMAGE_ID=$(glance --os-image-api-version 1 image-list | grep $container_format | grep -i $image_name | awk '{print $2}')
 
     # pass the appropriate variables via a config file
     CREDS_FILE=$MAGNUM_DIR/functional_creds.conf
@@ -56,10 +85,10 @@ region_name = $OS_REGION_NAME
 image_id = $IMAGE_ID
 nic_id = $NIC_ID
 keypair_id = default
-flavor_id = s1.magnum
-master_flavor_id = m1.magnum
+flavor_id = ${bm_flavor_id:-s1.magnum}
+master_flavor_id = ${bm_flavor_id:-m1.magnum}
 copy_logs = true
-csr_location = $MAGNUM_DIR/default.csr
+dns_nameserver = 8.8.8.8
 EOF
 
     # Note(eliqiao): Let's keep this only for debugging on gate.
@@ -70,41 +99,6 @@ EOF
     echo_summary "Generate a key-pair"
     ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
     nova keypair-add  --pub-key ~/.ssh/id_rsa.pub default
-
-    # create a valid sample csr
-    export CSR_FILE=$MAGNUM_DIR/default.csr
-    cat <<EOF > $CSR_FILE
------BEGIN CERTIFICATE REQUEST-----
-MIIByjCCATMCAQAwgYkxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlh
-MRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRMwEQYDVQQKEwpHb29nbGUgSW5jMR8w
-HQYDVQQLExZJbmZvcm1hdGlvbiBUZWNobm9sb2d5MRcwFQYDVQQDEw53d3cuZ29v
-Z2xlLmNvbTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEApZtYJCHJ4VpVXHfV
-IlstQTlO4qC03hjX+ZkPyvdYd1Q4+qbAeTwXmCUKYHThVRd5aXSqlPzyIBwieMZr
-WFlRQddZ1IzXAlVRDWwAo60KecqeAXnnUK+5fXoTI/UgWshre8tJ+x/TMHaQKR/J
-cIWPhqaQhsJuzZbvAdGA80BLxdMCAwEAAaAAMA0GCSqGSIb3DQEBBQUAA4GBAIhl
-4PvFq+e7ipARgI5ZM+GZx6mpCz44DTo0JkwfRDf+BtrsaC0q68eTf2XhYOsq4fkH
-Q0uA0aVog3f5iJxCa3Hp5gxbJQ6zV6kJ0TEsuaaOhEko9sdpCoPOnRBm2i/XRD2D
-6iNh8f8z0ShGsFqjDgFHyF3o+lUyj+UC6H1QW7bn
------END CERTIFICATE REQUEST-----
-EOF
-
-    # create an ivalid sample csr
-    export INVALID_CSR_FILE=$MAGNUM_DIR/invalid.csr
-    cat <<EOF > $INVALID_CSR_FILE
------BEGIN CERTIFICATE REQUEST-----
-FAKERFAKERyjCCATMCAQAwgYkxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlh
-MRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRMwEQYDVQQKEwpHb29nbGUgSW5jMR8w
-HQYDVQQLExZJbmZvcm1hdGlvbiBUZWNobm9sb2d5MRcwFQYDVQQDEw53d3cuZ29v
-Z2xlLmNvbTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEApZtYJCHJ4VpVXHfV
-IlstQTlO4qC03hjX+ZkPyvdYd1Q4+qbAeTwXmCUKYHThVRd5aXSqlPzyIBwieMZr
-WFlRQddZ1IzXAlVRDWwAo60KecqeAXnnUK+5fXoTI/UgWshre8tJ+x/TMHaQKR/J
-cIWPhqaQhsJuzZbvAdGA80BLxdMCAwEAAaAAMA0GCSqGSIb3DQEBBQUAA4GBAIhl
-4PvFq+e7ipARgI5ZM+GZx6mpCz44DTo0JkwfRDf+BtrsaC0q68eTf2XhYOsq4fkH
-Q0uA0aVog3f5iJxCa3Hp5gxbJQ6zV6kJ0TEsuaaOhEko9sdpCoPOnRBm2i/XRD2D
-6iNh8f8z0ShGsFqjDgFHyF3o+lUyj+UC6H1QW7bn
------END CERTIFICATE REQUEST-----
-EOF
-
 }
 
 function add_flavor {
@@ -130,8 +124,8 @@ function add_flavor {
 
     # Create magnum specific flavor for use in functional tests.
     echo_summary "Create a flavor"
-    nova flavor-create  m1.magnum 100 1024 8 1
-    nova flavor-create  s1.magnum 200 512 8 1
+    nova flavor-create  m1.magnum 100 1024 10 1
+    nova flavor-create  s1.magnum 200 512 10 1
 }
 
 if ! function_exists echo_summary; then
@@ -165,6 +159,7 @@ echo "Running magnum functional test suite for $1"
 # For api, we will run tempest tests
 
 coe=$1
+special=$2
 
 if [[ "api" == "$coe" ]]; then
     # Import devstack functions 'iniset', 'iniget' and 'trueorfalse'
@@ -187,7 +182,6 @@ if [[ "api" == "$coe" ]]; then
     iniset $BASE/new/tempest/etc/tempest.conf magnum keypair_id default
     iniset $BASE/new/tempest/etc/tempest.conf magnum flavor_id s1.magnum
     iniset $BASE/new/tempest/etc/tempest.conf magnum master_flavor_id m1.magnum
-    iniset $BASE/new/tempest/etc/tempest.conf magnum csr_location $CSR_FILE
     iniset $BASE/new/tempest/etc/tempest.conf magnum copy_logs True
 
     # show tempest config with magnum
@@ -214,9 +208,10 @@ else
 
     add_flavor
 
-    create_test_data $coe
+    create_test_data $coe $special
 
-    sudo -E -H -u jenkins tox -e functional-"$coe" -- --concurrency=1
+    target="${coe}${special}"
+    sudo -E -H -u jenkins tox -e functional-"$target" -- --concurrency=1
 fi
 EXIT_CODE=$?
 

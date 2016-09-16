@@ -15,12 +15,11 @@ import datetime
 import mock
 from oslo_config import cfg
 from oslo_utils import timeutils
-from six.moves.urllib import parse as urlparse
+from oslo_utils import uuidutils
 
 from magnum.api import attr_validator
 from magnum.api.controllers.v1 import bay as api_bay
 from magnum.common import exception
-from magnum.common import utils
 from magnum.conductor import api as rpcapi
 from magnum import objects
 from magnum.tests import base
@@ -39,7 +38,7 @@ class TestBayObject(base.TestCase):
         bay = api_bay.Bay(**bay_dict)
         self.assertEqual(1, bay.node_count)
         self.assertEqual(1, bay.master_count)
-        self.assertEqual(0, bay.bay_create_timeout)
+        self.assertEqual(60, bay.bay_create_timeout)
 
 
 class TestListBay(api_base.FunctionalTest):
@@ -76,6 +75,29 @@ class TestListBay(api_base.FunctionalTest):
         self.assertEqual(bay.uuid, response['uuid'])
         self._verify_attrs(self._expand_bay_attrs, response)
 
+    @mock.patch('magnum.common.clients.OpenStackClients.heat')
+    def test_get_one_failed_bay(self, mock_heat):
+        fake_resources = mock.MagicMock()
+        fake_resources.resource_name = 'fake_name'
+        fake_resources.resource_status_reason = 'fake_reason'
+
+        ht = mock.MagicMock()
+        ht.resources.list.return_value = [fake_resources]
+        mock_heat.return_value = ht
+
+        bay = obj_utils.create_test_bay(self.context, status='CREATE_FAILED')
+        response = self.get_json('/bays/%s' % bay['uuid'])
+        self.assertEqual(bay.uuid, response['uuid'])
+        self.assertEqual({'fake_name': 'fake_reason'}, response['bay_faults'])
+
+    @mock.patch('magnum.common.clients.OpenStackClients.heat')
+    def test_get_one_failed_bay_heatclient_exception(self, mock_heat):
+        mock_heat.resources.list.side_effect = Exception('fake')
+        bay = obj_utils.create_test_bay(self.context, status='CREATE_FAILED')
+        response = self.get_json('/bays/%s' % bay['uuid'])
+        self.assertEqual(bay.uuid, response['uuid'])
+        self.assertEqual({}, response['bay_faults'])
+
     def test_get_one_by_name(self):
         bay = obj_utils.create_test_bay(self.context)
         response = self.get_json('/bays/%s' % bay['name'])
@@ -92,9 +114,9 @@ class TestListBay(api_base.FunctionalTest):
 
     def test_get_one_by_name_multiple_bay(self):
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
         response = self.get_json('/bays/test_bay', expect_errors=True)
         self.assertEqual(409, response.status_int)
         self.assertEqual('application/json', response.content_type)
@@ -104,7 +126,7 @@ class TestListBay(api_base.FunctionalTest):
         bay_list = []
         for id_ in range(4):
             bay = obj_utils.create_test_bay(self.context, id=id_,
-                                            uuid=utils.generate_uuid())
+                                            uuid=uuidutils.generate_uuid())
             bay_list.append(bay)
 
         response = self.get_json('/bays?limit=3&marker=%s'
@@ -122,7 +144,7 @@ class TestListBay(api_base.FunctionalTest):
         bay_list = []
         for id_ in range(4):
             bay = obj_utils.create_test_bay(self.context, id=id_,
-                                            uuid=utils.generate_uuid())
+                                            uuid=uuidutils.generate_uuid())
             bay_list.append(bay)
 
         response = self.get_json('/bays/detail?limit=3&marker=%s'
@@ -141,7 +163,7 @@ class TestListBay(api_base.FunctionalTest):
         bm_list = []
         for id_ in range(5):
             bay = obj_utils.create_test_bay(self.context, id=id_,
-                                            uuid=utils.generate_uuid())
+                                            uuid=uuidutils.generate_uuid())
             bm_list.append(bay.uuid)
         response = self.get_json('/bays')
         self.assertEqual(len(bm_list), len(response['bays']))
@@ -149,7 +171,7 @@ class TestListBay(api_base.FunctionalTest):
         self.assertEqual(sorted(bm_list), sorted(uuids))
 
     def test_links(self):
-        uuid = utils.generate_uuid()
+        uuid = uuidutils.generate_uuid()
         obj_utils.create_test_bay(self.context, id=1, uuid=uuid)
         response = self.get_json('/bays/%s' % uuid)
         self.assertIn('links', response.keys())
@@ -162,7 +184,7 @@ class TestListBay(api_base.FunctionalTest):
     def test_collection_links(self):
         for id_ in range(5):
             obj_utils.create_test_bay(self.context, id=id_,
-                                      uuid=utils.generate_uuid())
+                                      uuid=uuidutils.generate_uuid())
         response = self.get_json('/bays/?limit=3')
         self.assertEqual(3, len(response['bays']))
 
@@ -173,7 +195,7 @@ class TestListBay(api_base.FunctionalTest):
         cfg.CONF.set_override('max_limit', 3, 'api')
         for id_ in range(5):
             obj_utils.create_test_bay(self.context, id=id_,
-                                      uuid=utils.generate_uuid())
+                                      uuid=uuidutils.generate_uuid())
         response = self.get_json('/bays')
         self.assertEqual(3, len(response['bays']))
 
@@ -194,7 +216,7 @@ class TestPatch(api_base.FunctionalTest):
         self.mock_bay_update.side_effect = self._simulate_rpc_bay_update
         self.addCleanup(p.stop)
 
-    def _simulate_rpc_bay_update(self, bay):
+    def _simulate_rpc_bay_update(self, bay, rollback=False):
         bay.save()
         return bay
 
@@ -256,8 +278,9 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(404, response.status_code)
 
     def test_replace_baymodel_id_failed(self):
-        baymodel = obj_utils.create_test_baymodel(self.context,
-                                                  uuid=utils.generate_uuid())
+        baymodel = obj_utils.create_test_baymodel(
+            self.context,
+            uuid=uuidutils.generate_uuid())
         response = self.patch_json('/bays/%s' % self.bay.uuid,
                                    [{'path': '/baymodel_id',
                                      'value': baymodel.uuid,
@@ -273,9 +296,9 @@ class TestPatch(api_base.FunctionalTest):
         mock_utcnow.return_value = test_time
 
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
 
         response = self.patch_json('/bays/test_bay',
                                    [{'path': '/name', 'value': 'test_bay',
@@ -287,7 +310,7 @@ class TestPatch(api_base.FunctionalTest):
     def test_replace_non_existent_baymodel_id(self):
         response = self.patch_json('/bays/%s' % self.bay.uuid,
                                    [{'path': '/baymodel_id',
-                                     'value': utils.generate_uuid(),
+                                     'value': uuidutils.generate_uuid(),
                                      'op': 'replace'}],
                                    expect_errors=True)
         self.assertEqual('application/json', response.content_type)
@@ -304,7 +327,7 @@ class TestPatch(api_base.FunctionalTest):
         self.assertTrue(response.json['errors'])
 
     def test_replace_non_existent_bay(self):
-        response = self.patch_json('/bays/%s' % utils.generate_uuid(),
+        response = self.patch_json('/bays/%s' % uuidutils.generate_uuid(),
                                    [{'path': '/name',
                                      'value': 'bay_example_B',
                                      'op': 'replace'}],
@@ -332,6 +355,17 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(400, response.status_int)
         self.assertTrue(response.json['errors'])
 
+    @mock.patch.object(rpcapi.API, 'bay_update_async')
+    def test_update_bay_with_rollback_enabled(self, mock_update):
+        response = self.patch_json(
+            '/bays/%s/?rollback=True' % self.bay.name,
+            [{'path': '/node_count', 'value': 4,
+              'op': 'replace'}],
+            headers={'OpenStack-API-Version': 'container-infra 1.3'})
+
+        mock_update.assert_called_once_with(mock.ANY, rollback=True)
+        self.assertEqual(202, response.status_code)
+
     def test_remove_ok(self):
         response = self.get_json('/bays/%s' % self.bay.uuid)
         self.assertIsNotNone(response['name'])
@@ -350,21 +384,15 @@ class TestPatch(api_base.FunctionalTest):
         self.assertEqual(self.bay.name, response['name'])
         self.assertEqual(self.bay.master_count, response['master_count'])
 
-    def test_remove_uuid(self):
-        response = self.patch_json('/bays/%s' % self.bay.uuid,
-                                   [{'path': '/uuid', 'op': 'remove'}],
-                                   expect_errors=True)
-        self.assertEqual(400, response.status_int)
-        self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['errors'])
-
-    def test_remove_baymodel_id(self):
-        response = self.patch_json('/bays/%s' % self.bay.uuid,
-                                   [{'path': '/baymodel_id', 'op': 'remove'}],
-                                   expect_errors=True)
-        self.assertEqual(400, response.status_int)
-        self.assertEqual('application/json', response.content_type)
-        self.assertTrue(response.json['errors'])
+    def test_remove_mandatory_property_fail(self):
+        mandatory_properties = ('/uuid', '/baymodel_id')
+        for p in mandatory_properties:
+            response = self.patch_json('/bays/%s' % self.bay.uuid,
+                                       [{'path': p, 'op': 'remove'}],
+                                       expect_errors=True)
+            self.assertEqual(400, response.status_int)
+            self.assertEqual('application/json', response.content_type)
+            self.assertTrue(response.json['errors'])
 
     def test_remove_non_existent_property(self):
         response = self.patch_json(
@@ -404,10 +432,7 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual(201, response.status_int)
         # Check location header
         self.assertIsNotNone(response.location)
-        expected_location = '/v1/bays/%s' % bdict['uuid']
-        self.assertEqual(expected_location,
-                         urlparse.urlparse(response.location).path)
-        self.assertEqual(bdict['uuid'], response.json['uuid'])
+        self.assertTrue(uuidutils.is_uuid_like(response.json['uuid']))
         self.assertNotIn('updated_at', response.json.keys)
         return_created_at = timeutils.parse_isotime(
             response.json['created_at']).replace(tzinfo=None)
@@ -445,7 +470,7 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(201, response.status_int)
         self.assertEqual(bdict['name'], response.json['name'])
-        self.assertTrue(utils.is_uuid_like(response.json['uuid']))
+        self.assertTrue(uuidutils.is_uuid_like(response.json['uuid']))
 
     def test_create_bay_no_baymodel_id(self):
         bdict = apiutils.bay_post_data()
@@ -455,7 +480,7 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual(400, response.status_int)
 
     def test_create_bay_with_non_existent_baymodel_id(self):
-        bdict = apiutils.bay_post_data(baymodel_id=utils.generate_uuid())
+        bdict = apiutils.bay_post_data(baymodel_id=uuidutils.generate_uuid())
         response = self.post_json('/bays', bdict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
@@ -508,11 +533,102 @@ class TestPost(api_base.FunctionalTest):
         self.assertEqual(1, response.json['master_count'])
 
     def test_create_bay_with_invalid_long_name(self):
-        bdict = apiutils.bay_post_data(name='x' * 256)
+        bdict = apiutils.bay_post_data(name='x' * 243)
         response = self.post_json('/bays', bdict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(400, response.status_int)
         self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_invalid_integer_name(self):
+        bdict = apiutils.bay_post_data(name='123456')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+        self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_invalid_integer_str_name(self):
+        bdict = apiutils.bay_post_data(name='123456test_bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+        self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_hyphen_invalid_at_start_name(self):
+        bdict = apiutils.bay_post_data(name='-test_bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+        self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_period_invalid_at_start_name(self):
+        bdict = apiutils.bay_post_data(name='.test_bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+        self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_underscore_invalid_at_start_name(self):
+        bdict = apiutils.bay_post_data(name='_test_bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+        self.assertTrue(response.json['errors'])
+
+    def test_create_bay_with_valid_str_int_name(self):
+        bdict = apiutils.bay_post_data(name='test_bay123456')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_hyphen_valid_name(self):
+        bdict = apiutils.bay_post_data(name='test-bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_period_valid_name(self):
+        bdict = apiutils.bay_post_data(name='test.bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_period_at_end_valid_name(self):
+        bdict = apiutils.bay_post_data(name='testbay.')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_hyphen_at_end_valid_name(self):
+        bdict = apiutils.bay_post_data(name='testbay-')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_underscore_at_end_valid_name(self):
+        bdict = apiutils.bay_post_data(name='testbay_')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_mix_special_char_valid_name(self):
+        bdict = apiutils.bay_post_data(name='test.-_bay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
+
+    def test_create_bay_with_capital_letter_start_valid_name(self):
+        bdict = apiutils.bay_post_data(name='Testbay')
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+        self.assertEqual(response.json['name'], bdict['name'])
 
     def test_create_bay_with_invalid_empty_name(self):
         bdict = apiutils.bay_post_data(name='')
@@ -527,6 +643,7 @@ class TestPost(api_base.FunctionalTest):
         response = self.post_json('/bays', bdict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
         self.assertEqual(201, response.status_int)
+        self.assertIsNotNone(response.json['name'])
 
     def test_create_bay_with_timeout_none(self):
         bdict = apiutils.bay_post_data()
@@ -537,7 +654,7 @@ class TestPost(api_base.FunctionalTest):
 
     def test_create_bay_with_no_timeout(self):
         def _simulate_rpc_bay_create(bay, bay_create_timeout):
-            self.assertEqual(0, bay_create_timeout)
+            self.assertEqual(60, bay_create_timeout)
             bay.create()
             return bay
         self.mock_bay_create.side_effect = _simulate_rpc_bay_create
@@ -573,7 +690,7 @@ class TestPost(api_base.FunctionalTest):
 
     def test_create_bay_with_invalid_ext_network(self):
         bdict = apiutils.bay_post_data()
-        self.mock_valid_os_res.side_effect = exception.NetworkNotFound(
+        self.mock_valid_os_res.side_effect = exception.ExternalNetworkNotFound(
             'test-net')
         response = self.post_json('/bays', bdict, expect_errors=True)
         self.assertEqual('application/json', response.content_type)
@@ -615,6 +732,24 @@ class TestPost(api_base.FunctionalTest):
         self.assertTrue(self.mock_valid_os_res.called)
         self.assertEqual(400, response.status_int)
 
+    def test_create_bay_with_no_lb_one_node(self):
+        baymodel = obj_utils.create_test_baymodel(
+            self.context, name='foo', uuid='foo', master_lb_enabled=False)
+        bdict = apiutils.bay_post_data(baymodel_id=baymodel.name,
+                                       master_count=1)
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(201, response.status_int)
+
+    def test_create_bay_with_no_lb_multi_node(self):
+        baymodel = obj_utils.create_test_baymodel(
+            self.context, name='foo', uuid='foo', master_lb_enabled=False)
+        bdict = apiutils.bay_post_data(baymodel_id=baymodel.name,
+                                       master_count=3)
+        response = self.post_json('/bays', bdict, expect_errors=True)
+        self.assertEqual('application/json', response.content_type)
+        self.assertEqual(400, response.status_int)
+
 
 class TestDelete(api_base.FunctionalTest):
 
@@ -640,29 +775,11 @@ class TestDelete(api_base.FunctionalTest):
         self.assertTrue(response.json['errors'])
 
     def test_delete_bay_not_found(self):
-        uuid = utils.generate_uuid()
+        uuid = uuidutils.generate_uuid()
         response = self.delete('/bays/%s' % uuid, expect_errors=True)
         self.assertEqual(404, response.status_int)
         self.assertEqual('application/json', response.content_type)
         self.assertTrue(response.json['errors'])
-
-    def test_delete_bay_with_pods(self):
-        obj_utils.create_test_pod(self.context, bay_uuid=self.bay.uuid)
-        response = self.delete('/bays/%s' % self.bay.uuid,
-                               expect_errors=True)
-        self.assertEqual(204, response.status_int)
-
-    def test_delete_bay_with_services(self):
-        obj_utils.create_test_service(self.context, bay_uuid=self.bay.uuid)
-        response = self.delete('/bays/%s' % self.bay.uuid,
-                               expect_errors=True)
-        self.assertEqual(204, response.status_int)
-
-    def test_delete_bay_with_replication_controllers(self):
-        obj_utils.create_test_rc(self.context, bay_uuid=self.bay.uuid)
-        response = self.delete('/bays/%s' % self.bay.uuid,
-                               expect_errors=True)
-        self.assertEqual(204, response.status_int)
 
     def test_delete_bay_with_name_not_found(self):
         response = self.delete('/bays/not_found', expect_errors=True)
@@ -677,9 +794,9 @@ class TestDelete(api_base.FunctionalTest):
 
     def test_delete_multiple_bay_by_name(self):
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
         obj_utils.create_test_bay(self.context, name='test_bay',
-                                  uuid=utils.generate_uuid())
+                                  uuid=uuidutils.generate_uuid())
         response = self.delete('/bays/test_bay', expect_errors=True)
         self.assertEqual(409, response.status_int)
         self.assertEqual('application/json', response.content_type)
@@ -714,7 +831,7 @@ class TestBayPolicyEnforcement(api_base.FunctionalTest):
     def test_policy_disallow_detail(self):
         self._common_policy_check(
             "bay:detail", self.get_json,
-            '/bays/%s/detail' % utils.generate_uuid(),
+            '/bays/%s/detail' % uuidutils.generate_uuid(),
             expect_errors=True)
 
     def test_policy_disallow_update(self):

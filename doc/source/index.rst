@@ -32,15 +32,13 @@ Architecture
 
 There are several different types of objects in the magnum system:
 
-* **Bay:** A collection of node objects where work is scheduled
-* **BayModel:** An object stores template information about the bay which is
-  used to create new bays consistently
+* **Cluster:** A collection of node objects where work is scheduled
+* **ClusterTemplate:** An object stores template information about the cluster
+  which is used to create new clusters consistently
 * **Pod:** A collection of containers running on one physical or virtual
   machine
 * **Service:** An abstraction which defines a logical set of pods and a policy
   by which to access them
-* **ReplicationController:** An abstraction for managing a group of pods to
-  ensure a specified number of resources are running
 * **Container:** A Docker container
 
 Two binaries work together to compose the magnum system.  The first binary
@@ -53,7 +51,7 @@ scalability to the conductor as well.
 
 The magnum-conductor process runs on a controller machine and connects to a
 Kubernetes or Docker REST API endpoint.  The Kubernetes and Docker REST API
-endpoints are managed by the bay object.
+endpoints are managed by the cluster object.
 
 When service or pod objects are created, Kubernetes may be directly contacted
 via the Kubernetes REST API.  When container objects are acted upon, the
@@ -62,11 +60,11 @@ Docker REST API may be directly contacted.
 Features
 ========
 
-* Abstractions for bays, containers, nodes, pods, replication controllers, and
-  services
-* Integration with Kubernetes and Docker for backend container technology
+* Abstractions for Clusters
+* Integration with Kubernetes, Swarm, Mesos for backend container technology
 * Integration with Keystone for multi-tenant security
 * Integration with Neutron for Kubernetes multi-tenancy network security
+* Integration with Cinder to provide volume service for containers
 
 Developer Info
 ==============
@@ -76,12 +74,12 @@ Developer Info
 
    dev/quickstart
    dev/manual-devstack
-   dev/bay-template-example.rst
-   dev/build-atomic-image.rst
+   dev/cluster-type-definition.rst
    dev/kubernetes-load-balancer.rst
-   dev/tls.rst
-   dev/mesos.rst
    dev/functional-test.rst
+   dev/reno.rst
+   dev/api_microversion.rst
+   api_microversion_history.rst
    magnum-proxy.rst
    contributing
    heat-templates
@@ -96,3 +94,5 @@ Work In Progress
 
    troubleshooting-guide.rst
    userguide.rst
+   configuring.rst
+   install-guide-from-source.rst
