@@ -6,6 +6,9 @@ magnum (3.0.0-1) experimental; urgency=medium
   * Removed all patches (now irrelevant).
   * Updated Danish translation of the debconf templates (Closes: #830647).
 
+  [ Spyros Trigazis ]
+  * Fixed endpoint registration type and description.
+
  -- Thomas Goirand <zigo@debian.org>  Mon, 11 Jul 2016 14:31:58 +0200
 
 magnum (2.0.0-5) unstable; urgency=medium
