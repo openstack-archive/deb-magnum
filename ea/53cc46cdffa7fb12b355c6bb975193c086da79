@@ -1,0 +1,11 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: yatin <yatin.karel@nectechnologies.in>
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: venkatamahesh <Venkata.Kotha@infinite.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 20 Sep 2016 07:41:20 +0000
+Reviewed-on: https://review.openstack.org/372665
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
