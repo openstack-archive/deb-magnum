@@ -1,0 +1,10 @@
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 21 Sep 2016 16:08:49 +0000
+Reviewed-on: https://review.openstack.org/369145
+Project: openstack/deb-magnum
+Branch: refs/heads/master
