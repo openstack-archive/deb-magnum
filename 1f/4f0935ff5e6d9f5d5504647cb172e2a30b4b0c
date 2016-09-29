@@ -1,0 +1,10 @@
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: Stephen Watson <stephen.watson@intel.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Workflow+1: Ton Ngo <ton@us.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 29 Sep 2016 00:06:37 +0000
+Reviewed-on: https://review.openstack.org/376399
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
