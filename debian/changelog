@@ -6,7 +6,7 @@ magnum (3.1.1-4) unstable; urgency=medium
 
   [ Thomas Goirand ]
   * New upstream release.
-  * Uploading to unstable.
+  * Uploading to unstable (Closes: #835100).
   * Fixed oslotest EPOCH.
   * Debconf translation:
     - it (Closes: #839194).
