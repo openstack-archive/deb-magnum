@@ -30,31 +30,30 @@ def remove_internal(values, internal):
 
 
 def baymodel_post_data(**kw):
-    baymodel = utils.get_test_baymodel(**kw)
+    baymodel = utils.get_test_cluster_template(**kw)
     internal = baymodel_controller.BayModelPatchType.internal_attrs()
     return remove_internal(baymodel, internal)
 
 
 def cluster_template_post_data(**kw):
-    cluster_template = utils.get_test_baymodel(**kw)
+    cluster_template = utils.get_test_cluster_template(**kw)
     internal = cluster_tmp_ctrl.ClusterTemplatePatchType.internal_attrs()
     return remove_internal(cluster_template, internal)
 
 
 def bay_post_data(**kw):
-    bay = utils.get_test_bay(**kw)
+    bay = utils.get_test_cluster(**kw)
+    bay['baymodel_id'] = kw.get('baymodel_id', bay['cluster_template_id'])
     bay['bay_create_timeout'] = kw.get('bay_create_timeout', 15)
+    del bay['cluster_template_id']
+    del bay['create_timeout']
     internal = bay_controller.BayPatchType.internal_attrs()
     return remove_internal(bay, internal)
 
 
 def cluster_post_data(**kw):
-    cluster = utils.get_test_bay(**kw)
+    cluster = utils.get_test_cluster(**kw)
     cluster['create_timeout'] = kw.get('create_timeout', 15)
-    cluster['cluster_template_id'] = kw.get('cluster_template_id',
-                                            cluster['baymodel_id'])
-    del cluster['bay_create_timeout']
-    del cluster['baymodel_id']
     internal = cluster_controller.ClusterPatchType.internal_attrs()
     return remove_internal(cluster, internal)
 
@@ -72,7 +71,7 @@ def mservice_get_data(**kw):
     """Simulate what the RPC layer will get from DB """
     faketime = datetime.datetime(2001, 1, 1, tzinfo=pytz.UTC)
     return {
-        'binary': kw.get('binary', 'fake-binary'),
+        'binary': kw.get('binary', 'magnum-conductor'),
         'host': kw.get('host', 'fake-host'),
         'id': kw.get('id', 13),
         'report_count': kw.get('report_count', 13),

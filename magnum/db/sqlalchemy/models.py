@@ -99,10 +99,10 @@ class MagnumBase(models.TimestampMixin,
 Base = declarative_base(cls=MagnumBase)
 
 
-class Bay(Base):
-    """Represents a bay."""
+class Cluster(Base):
+    """Represents a Cluster."""
 
-    __tablename__ = 'bay'
+    __tablename__ = 'cluster'
     __table_args__ = (
         schema.UniqueConstraint('uuid', name='uniq_bay0uuid'),
         table_args()
@@ -112,7 +112,7 @@ class Bay(Base):
     user_id = Column(String(255))
     uuid = Column(String(36))
     name = Column(String(255))
-    baymodel_id = Column(String(255))
+    cluster_template_id = Column(String(255))
     stack_id = Column(String(255))
     api_address = Column(String(255))
     node_addresses = Column(JSONEncodedList)
@@ -120,7 +120,7 @@ class Bay(Base):
     master_count = Column(Integer())
     status = Column(String(20))
     status_reason = Column(Text)
-    bay_create_timeout = Column(Integer())
+    create_timeout = Column(Integer())
     discovery_url = Column(String(255))
     master_addresses = Column(JSONEncodedList)
     # TODO(wanghua): encrypt trust_id in db
@@ -141,10 +141,10 @@ class Bay(Base):
     magnum_cert_ref = Column(String(512))
 
 
-class BayModel(Base):
-    """Represents a bay model."""
+class ClusterTemplate(Base):
+    """Represents a ClusterTemplate."""
 
-    __tablename__ = 'baymodel'
+    __tablename__ = 'cluster_template'
     __table_args__ = (
         schema.UniqueConstraint('uuid', name='uniq_baymodel0uuid'),
         table_args()

@@ -46,11 +46,11 @@ class Certificate(base.APIBase):
     def _set_cluster_uuid(self, value):
         if value and self._cluster_uuid != value:
             try:
-                self._cluster = api_utils.get_resource('Bay', value)
+                self._cluster = api_utils.get_resource('Cluster', value)
                 self._cluster_uuid = self._cluster.uuid
             except exception.ClusterNotFound as e:
                 # Change error code because 404 (NotFound) is inappropriate
-                # response for a POST request to create a Bay
+                # response for a POST request to create a Cluster
                 e.code = 400  # BadRequest
                 raise
         elif value == wtypes.Unset:
@@ -84,15 +84,14 @@ class Certificate(base.APIBase):
             self.fields.append(field)
             setattr(self, field, kwargs.get(field, wtypes.Unset))
 
-        # set the attribute for cluster_uuid
-        self.fields.append('cluster_uuid')
-        if 'cluster_uuid' in kwargs.keys():
-            setattr(self, 'cluster_uuid', kwargs.get('cluster_uuid',
-                                                     wtypes.Unset))
+        # set the attribute for bay_uuid for backwards compatibility
+        self.fields.append('bay_uuid')
+        setattr(self, 'bay_uuid', kwargs.get('bay_uuid',  self._cluster_uuid))
 
     def get_cluster(self):
         if not self._cluster:
-            self._cluster = api_utils.get_resource('Bay', self.cluster_uuid)
+            self._cluster = api_utils.get_resource('Cluster',
+                                                   self.cluster_uuid)
         return self._cluster
 
     @staticmethod
@@ -103,10 +102,10 @@ class Certificate(base.APIBase):
 
         certificate.links = [link.Link.make_link('self', url,
                                                  'certificates',
-                                                 certificate.bay_uuid),
+                                                 certificate.cluster_uuid),
                              link.Link.make_link('bookmark', url,
                                                  'certificates',
-                                                 certificate.bay_uuid,
+                                                 certificate.cluster_uuid,
                                                  bookmark=True)]
         return certificate
 
@@ -143,7 +142,7 @@ class CertificateController(base.Controller):
         logical name of the cluster.
         """
         context = pecan.request.context
-        cluster = api_utils.get_resource('Bay', cluster_ident)
+        cluster = api_utils.get_resource('Cluster', cluster_ident)
         policy.enforce(context, 'certificate:get', cluster,
                        action='certificate:get')
         certificate = pecan.request.rpcapi.get_ca_certificate(cluster)

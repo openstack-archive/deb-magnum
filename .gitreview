@@ -1,5 +1,5 @@
 [gerrit]
 host=review.openstack.org
 port=29418
-project=openstack/deb-magnum.git
-defaultbranch=debian/newton
+project=openstack/magnum.git
+defaultbranch=stable/newton
