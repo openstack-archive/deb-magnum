@@ -19,16 +19,21 @@ coe=$1
 special=$2
 
 export PROJECTS="openstack/barbican $PROJECTS"
-export DEVSTACK_LOCAL_CONFIG="enable_plugin magnum git://git.openstack.org/openstack/magnum"
+export DEVSTACK_LOCAL_CONFIG="enable_plugin heat git://git.openstack.org/openstack/heat"
 export DEVSTACK_LOCAL_CONFIG+=$'\n'"enable_plugin ceilometer git://git.openstack.org/openstack/ceilometer"
 
+if [ "${coe}${special}" != "k8s-ironic" ]; then
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"enable_plugin neutron-lbaas https://git.openstack.org/openstack/neutron-lbaas"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"enable_plugin octavia https://github.com/openstack/octavia"
+fi
+
 if [ "$coe" = "mesos" ]; then
-    echo "MAGNUM_GUEST_IMAGE_URL=https://fedorapeople.org/groups/magnum/ubuntu-14.04.3-mesos-0.25.0.qcow2" >> $BASE/new/devstack/localrc
+    echo "MAGNUM_GUEST_IMAGE_URL=https://fedorapeople.org/groups/magnum/ubuntu-mesos-newton.qcow2" >> $BASE/new/devstack/localrc
 elif [ "$coe" = "k8s-coreos" ]; then
-    echo "MAGNUM_GUEST_IMAGE_URL=http://beta.release.core-os.net/amd64-usr/current/coreos_production_openstack_image.img.bz2" >> $BASE/new/devstack/localrc
+    echo "MAGNUM_GUEST_IMAGE_URL=http://beta.release.core-os.net/amd64-usr/1153.4.0/coreos_production_openstack_image.img.bz2" >> $BASE/new/devstack/localrc
 elif [ "${coe}${special}" = "k8s-ironic" ]; then
-    export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_GUEST_IMAGE_URL='https://fedorapeople.org/groups/magnum/fedora-23-kubernetes-ironic.tar.gz'"
-    export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_IMAGE_NAME='fedora-23-kubernetes-ironic'"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_GUEST_IMAGE_URL='https://fedorapeople.org/groups/magnum/fedora-24-kubernetes-ironic.tar.gz'"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_IMAGE_NAME='fedora-24-kubernetes-ironic'"
 
     export DEVSTACK_GATE_VIRT_DRIVER="ironic"
     # NOTE(yuanying): Current implementation requires only 1 subnet under network
@@ -37,6 +42,15 @@ elif [ "${coe}${special}" = "k8s-ironic" ]; then
     # export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service cinder c-sch c-api c-vol"
 
     export DEVSTACK_LOCAL_CONFIG+=$'\n'"enable_plugin ironic git://git.openstack.org/openstack/ironic"
+
+    # Disable LBaaS(v1) and LBaaS(v2)
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service q-lbaas"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service q-lbaasv2"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service octavia"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service o-cw"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service o-hk"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service o-hm"
+    export DEVSTACK_LOCAL_CONFIG+=$'\n'"disable_service o-api"
 
     export DEVSTACK_LOCAL_CONFIG+=$'\n'"IRONIC_DEPLOY_DRIVER=pxe_ssh"
     export DEVSTACK_LOCAL_CONFIG+=$'\n'"IRONIC_BAREMETAL_BASIC_OPS=True"
@@ -67,5 +81,8 @@ else
     export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_GUEST_IMAGE_URL='http://tarballs.openstack.org/magnum/images/fedora-atomic-f23-dib.qcow2'"
     export DEVSTACK_LOCAL_CONFIG+=$'\n'"MAGNUM_IMAGE_NAME='fedora-atomic-f23-dib'"
 fi
+
+# Enable magnum plugin in the last step
+export DEVSTACK_LOCAL_CONFIG+=$'\n'"enable_plugin magnum git://git.openstack.org/openstack/magnum"
 
 $BASE/new/devstack-gate/devstack-vm-gate.sh

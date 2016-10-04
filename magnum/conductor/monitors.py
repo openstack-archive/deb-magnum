@@ -20,7 +20,7 @@ from oslo_log import log
 from oslo_utils import importutils
 import six
 
-from magnum.objects.fields import BayType as bay_type
+from magnum.objects import fields
 
 
 LOG = log.getLogger(__name__)
@@ -34,18 +34,18 @@ CONF.import_opt('default_timeout',
                 group='docker')
 
 COE_CLASS_PATH = {
-    bay_type.SWARM: 'magnum.conductor.swarm_monitor.SwarmMonitor',
-    bay_type.KUBERNETES: 'magnum.conductor.k8s_monitor.K8sMonitor',
-    bay_type.MESOS: 'magnum.conductor.mesos_monitor.MesosMonitor'
+    fields.ClusterType.SWARM: 'magnum.conductor.swarm_monitor.SwarmMonitor',
+    fields.ClusterType.KUBERNETES: 'magnum.conductor.k8s_monitor.K8sMonitor',
+    fields.ClusterType.MESOS: 'magnum.conductor.mesos_monitor.MesosMonitor'
 }
 
 
 @six.add_metaclass(abc.ABCMeta)
 class MonitorBase(object):
 
-    def __init__(self, context, bay):
+    def __init__(self, context, cluster):
         self.context = context
-        self.bay = bay
+        self.cluster = cluster
 
     @abc.abstractproperty
     def metrics_spec(self):
@@ -67,10 +67,12 @@ class MonitorBase(object):
         return func()
 
 
-def create_monitor(context, bay):
-    if bay.baymodel.coe in COE_CLASS_PATH:
-        coe_cls = importutils.import_class(COE_CLASS_PATH[bay.baymodel.coe])
-        return coe_cls(context, bay)
+def create_monitor(context, cluster):
+    if cluster.cluster_template.coe in COE_CLASS_PATH:
+        coe_cls = importutils.import_class(
+            COE_CLASS_PATH[cluster.cluster_template.coe])
+        return coe_cls(context, cluster)
 
-    LOG.debug("Cannot create monitor with bay type '%s'", bay.baymodel.coe)
+    LOG.debug("Cannot create monitor with cluster type '%s'",
+              cluster.cluster_template.coe)
     return None

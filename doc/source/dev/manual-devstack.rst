@@ -52,25 +52,32 @@ and neutron::
     enable_service q-dhcp
     enable_service q-l3
     enable_service q-meta
-    # Note: Default template uses LBaaS.
-    enable_service q-lbaas
     enable_service neutron
 
-    # Enable heat services
-    enable_service h-eng
-    enable_service h-api
-    enable_service h-api-cfn
-    enable_service h-api-cw
+    # Disable LBaaS(v1) service
+    disable_service q-lbaas
 
+    # Enable LBaaS(v2) services
+    enable_service q-lbaasv2
+    enable_service octavia
+    enable_service o-cw
+    enable_service o-hk
+    enable_service o-hm
+    enable_service o-api
+
+    # Enable heat plugin
+    enable_plugin heat https://git.openstack.org/openstack/heat
     # Enable barbican services
     enable_plugin barbican https://git.openstack.org/openstack/barbican
     enable_plugin neutron-lbaas https://git.openstack.org/openstack/neutron-lbaas
+    enable_plugin octavia https://git.openstack.org/openstack/octavia
 
     VOLUME_BACKING_FILE_SIZE=20G
     END
 
 **NOTE:** Update PUBLIC_INTERFACE and other parameters as appropriate for
 your system.
+**NOTE:** Enable heat plugin is necessary.
 
 More devstack configuration information can be found at
 http://docs.openstack.org/developer/devstack/configuration.html
@@ -115,14 +122,14 @@ likely work with other micro-OS platforms, but each requires individual
 support in the heat template.
 
 Store the Fedora Atomic micro-OS in glance. Download the qcow2 Atomic image
-from https://fedorapeople.org/groups/magnum/fedora-atomic-latest.qcow2 and
+from https://fedorapeople.org/groups/magnum/fedora-atomic-newton.qcow2 and
 then upload it to glance::
 
-    glance image-create --name fedora-atomic-latest \
+    glance image-create --name fedora-atomic-newton \
                         --visibility public \
                         --disk-format qcow2 \
                         --os-distro fedora-atomic \
-                        --container-format bare < fedora-atomic-latest.qcow2
+                        --container-format bare < fedora-atomic-newton.qcow2
 
 Create a domain and domain admin for trust::
 

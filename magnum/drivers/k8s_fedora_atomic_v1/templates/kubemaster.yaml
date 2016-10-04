@@ -78,9 +78,9 @@ parameters:
       The port which are used by kube-apiserver to provide Kubernetes
       service.
 
-  bay_uuid:
+  cluster_uuid:
     type: string
-    description: identifier for the bay this template is generating
+    description: identifier for the cluster this template is generating
 
   magnum_url:
     type: string
@@ -198,7 +198,7 @@ resources:
   ######################################################################
   #
   # resource that exposes the IPs of either the kube master or the API
-  # LBaaS pool depending on whether LBaaS is enabled for the bay.
+  # LBaaS pool depending on whether LBaaS is enabled for the cluster.
   #
 
   api_address_switch:
@@ -221,7 +221,7 @@ resources:
       group: ungrouped
       config:
         str_replace:
-          template: {get_file: fragments/write-heat-params-master.yaml}
+          template: {get_file: ../../common/templates/kubernetes/fragments/write-heat-params-master.yaml}
           params:
             "$KUBE_API_PUBLIC_ADDRESS": {get_attr: [api_address_switch, public_ip]}
             "$KUBE_API_PRIVATE_ADDRESS": {get_attr: [api_address_switch, private_ip]}
@@ -243,7 +243,7 @@ resources:
             "$TENANT_NAME": {get_param: tenant_name}
             "$CLUSTER_SUBNET": {get_param: fixed_subnet}
             "$TLS_DISABLED": {get_param: tls_disabled}
-            "$BAY_UUID": {get_param: bay_uuid}
+            "$CLUSTER_UUID": {get_param: cluster_uuid}
             "$MAGNUM_URL": {get_param: magnum_url}
             "$HTTP_PROXY": {get_param: http_proxy}
             "$HTTPS_PROXY": {get_param: https_proxy}
@@ -259,7 +259,7 @@ resources:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/make-cert.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/make-cert.sh}
 
   configure_docker_storage:
     type: OS::Heat::SoftwareConfig
@@ -269,97 +269,97 @@ resources:
         str_replace:
           params:
             $configure_docker_storage_driver: {get_file: ../../common/templates/fragments/configure_docker_storage_driver_atomic.sh}
-          template: {get_file: fragments/configure-docker-storage.sh}
+          template: {get_file: ../../common/templates/fragments/configure-docker-storage.sh}
 
   configure_etcd:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/configure-etcd.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/configure-etcd.sh}
 
   write_kube_os_config:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/write-kube-os-config.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/write-kube-os-config.sh}
 
   configure_kubernetes:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/configure-kubernetes-master.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/configure-kubernetes-master.sh}
 
   write_network_config:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/write-network-config.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/write-network-config.sh}
 
   network_config_service:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/network-config-service.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/network-config-service.sh}
 
   enable_services:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/enable-services-master.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/enable-services-master.sh}
 
   kube_examples:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/kube-examples.yaml}
+      config: {get_file: ../../common/templates/kubernetes/fragments/kube-examples.yaml}
 
   network_service:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/network-service.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/network-service.sh}
 
   enable_kube_podmaster:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/enable-kube-podmaster.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/enable-kube-podmaster.sh}
 
   kube_system_namespace_service:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/kube-system-namespace-service.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/kube-system-namespace-service.sh}
 
   kube_ui_service:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/kube-ui-service.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/kube-ui-service.sh}
 
   enable_kube_proxy:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/enable-kube-proxy-master.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/enable-kube-proxy-master.sh}
 
   master_wc_notify:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/wc-notify-master.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/wc-notify-master.sh}
 
   disable_selinux:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/disable-selinux.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/disable-selinux.sh}
 
   add_proxy:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/add-proxy.sh}
+      config: {get_file: ../../common/templates/kubernetes/fragments/add-proxy.sh}
 
   kube_master_init:
     type: OS::Heat::MultipartMime
@@ -420,17 +420,19 @@ resources:
       port_id: {get_resource: kube_master_eth0}
 
   api_pool_member:
-    type: Magnum::Optional::Neutron::PoolMember
+    type: Magnum::Optional::Neutron::LBaaS::PoolMember
     properties:
-      pool_id: {get_param: api_pool_id}
+      pool: {get_param: api_pool_id}
       address: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+      subnet: { get_param: fixed_subnet }
       protocol_port: {get_param: kubernetes_port}
 
   etcd_pool_member:
-    type: Magnum::Optional::Neutron::PoolMember
+    type: Magnum::Optional::Neutron::LBaaS::PoolMember
     properties:
-      pool_id: {get_param: etcd_pool_id}
+      pool: {get_param: etcd_pool_id}
       address: {get_attr: [kube_master_eth0, fixed_ips, 0, ip_address]}
+      subnet: { get_param: fixed_subnet }
       protocol_port: 2379
 
   ######################################################################

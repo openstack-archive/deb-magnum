@@ -1,15 +1,17 @@
-magnum (3.0.0-3) UNRELEASED; urgency=medium
+magnum (3.1.1-4) unstable; urgency=medium
 
   [ Ondřej Nový ]
   * d/s/options: extend-diff-ignore of .gitreview
   * d/control: Use correct branch in Vcs-* fields
 
   [ Thomas Goirand ]
+  * New upstream release.
+  * Uploading to unstable.
   * Fixed oslotest EPOCH.
   * Debconf translation:
     - it (Closes: #839194).
 
- -- Thomas Goirand <zigo@debian.org>  Wed, 28 Sep 2016 09:53:56 +0200
+ -- Thomas Goirand <zigo@debian.org>  Tue, 04 Oct 2016 09:54:56 +0200
 
 magnum (3.0.0-1) experimental; urgency=medium
 

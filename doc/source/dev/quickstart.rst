@@ -78,7 +78,8 @@ To run unit test coverage and check percentage of code covered::
 
     tox -e cover
 
-
+To discover and interact with templates, please refer to
+`<http://docs.openstack.org/developer/magnum/dev/bay-template-example.html>`_
 
 Exercising the Services Using Devstack
 ======================================
@@ -107,7 +108,7 @@ Clone devstack::
 
 We will run devstack with minimal local.conf settings required to enable
 magnum, heat, and neutron (neutron is enabled by default in devstack since
-Kilo, and heat is enabled by the magnum plugin)::
+Kilo, and heat must be enabled by yourself)::
 
     cat > /opt/stack/devstack/local.conf << END
     [[local|localrc]]
@@ -118,15 +119,34 @@ Kilo, and heat is enabled by the magnum plugin)::
     ADMIN_PASSWORD=password
     # magnum requires the following to be set correctly
     PUBLIC_INTERFACE=eth1
-    enable_plugin magnum https://git.openstack.org/openstack/magnum
+
     # Enable barbican service and use it to store TLS certificates
     # For details http://docs.openstack.org/developer/magnum/dev/tls.html
     enable_plugin barbican https://git.openstack.org/openstack/barbican
+    enable_plugin heat https://git.openstack.org/openstack/heat
     enable_plugin neutron-lbaas https://git.openstack.org/openstack/neutron-lbaas
+    enable_plugin octavia https://git.openstack.org/openstack/octavia
+
+    # Enable magnum plugin after dependent plugins
+    enable_plugin magnum https://git.openstack.org/openstack/magnum
+
+    # Optional:  uncomment to enable the Magnum UI plugin in Horizon
+    #enable_plugin magnum-ui https://github.com/openstack/magnum-ui
+
+    # Disable LBaaS(v1) service
+    disable_service q-lbaas
+    # Enable LBaaS(v2) services
+    enable_service q-lbaasv2
+    enable_service octavia
+    enable_service o-cw
+    enable_service o-hk
+    enable_service o-hm
+    enable_service o-api
     VOLUME_BACKING_FILE_SIZE=20G
     END
 
 **NOTE:** Update PUBLIC_INTERFACE as appropriate for your system.
+**NOTE:** Enable heat plugin is necessary.
 
 Optionally, you can enable ceilometer in devstack. If ceilometer is enabled,
 magnum will periodically send metrics to ceilometer::
@@ -185,7 +205,7 @@ when installing devstack use::
     | 090de3a2-2c0c-42d5-b5a3-cfcddd6d011b | cirros-0.3.4-x86_64-uec         | ami         | ami              | 25165824  | active | f98b9727094d40c78b1ed40e3bc91e80 |
     | 9501d296-f0aa-4c0e-bc24-2a680f8741f0 | cirros-0.3.4-x86_64-uec-kernel  | aki         | aki              | 4979632   | active | f98b9727094d40c78b1ed40e3bc91e80 |
     | 01478d1a-59e0-4f36-b69e-0eaf5821ee46 | cirros-0.3.4-x86_64-uec-ramdisk | ari         | ari              | 3740163   | active | f98b9727094d40c78b1ed40e3bc91e80 |
-    | f14d6ee3-9e53-4f22-ba42-44e95810c294 | fedora-atomic-latest            | qcow2       | bare             | 507928064 | active | f98b9727094d40c78b1ed40e3bc91e80 |
+    | f14d6ee3-9e53-4f22-ba42-44e95810c294 | fedora-atomic-newton            | qcow2       | bare             | 507928064 | active | f98b9727094d40c78b1ed40e3bc91e80 |
     +--------------------------------------+---------------------------------+-------------+------------------+-----------+--------+----------------------------------+
 
 To list the available commands and resources for magnum, use::
@@ -197,11 +217,11 @@ use::
 
     magnum service-list
 
-    +----+------------------------------------+------------------+-------+
-    | id | host                               | binary           | state |
-    +----+------------------------------------+------------------+-------+
-    | 1  | oxy-dev.hq1-0a5a3c02.hq1.abcde.com | magnum-conductor | up    |
-    +----+------------------------------------+------------------+-------+
+    +----+---------------------------------------+------------------+-------+----------+-----------------+---------------------------+---------------------------+
+    | id | host                                  | binary           | state | disabled | disabled_reason | created_at                | updated_at                |
+    +----+---------------------------------------+------------------+-------+----------+-----------------+---------------------------+---------------------------+
+    | 1  | oxy-dev.hq1-0a5a3c02.hq1.abcde.com    | magnum-conductor | up    |          | -               | 2016-08-31T10:03:36+00:00 | 2016-08-31T10:11:41+00:00 |
+    +----+---------------------------------------+------------------+-------+----------+-----------------+---------------------------+---------------------------+
 
 Create a keypair for use with the ClusterTemplate::
 
@@ -218,7 +238,7 @@ Fedora Atomic. The COE (Container Orchestration Engine) and keypair need to
 be specified as well::
 
     magnum cluster-template-create --name k8s-cluster-template \
-                           --image-id fedora-atomic-latest \
+                           --image-id fedora-atomic-newton \
                            --keypair-id testkey \
                            --external-network-id public \
                            --dns-nameserver 8.8.8.8 \
@@ -245,11 +265,11 @@ The existing clusters can be listed as follows::
 
     magnum cluster-list
 
-    +--------------------------------------+-------------+------------+-----------------+
-    | uuid                                 | name        | node_count | status          |
-    +--------------------------------------+-------------+------------+-----------------+
-    | 9dccb1e6-02dc-4e2b-b897-10656c5339ce | k8s-cluster | 1          | CREATE_COMPLETE |
-    +--------------------------------------+-------------+------------+-----------------+
+    +--------------------------------------+-------------+------------+--------------+-----------------+
+    | uuid                                 | name        | node_count | master_count | status          |
+    +--------------------------------------+-------------+------------+--------------------------------+
+    | 9dccb1e6-02dc-4e2b-b897-10656c5339ce | k8s-cluster | 1          | 1            | CREATE_COMPLETE |
+    +--------------------------------------+-------------+------------+--------------+-----------------+
 
 More detailed information for a given cluster is obtained via::
 
@@ -298,7 +318,7 @@ Building a Kubernetes Cluster - Based on CoreOS
 You can create a Kubernetes cluster based on CoreOS as an alternative to
 Atomic. First, download the official CoreOS image::
 
-    wget http://beta.release.core-os.net/amd64-usr/current/coreos_production_openstack_image.img.bz2
+    wget http://beta.release.core-os.net/amd64-usr/1153.4.0/coreos_production_openstack_image.img.bz2
     bunzip2 coreos_production_openstack_image.img.bz2
 
 Upload the image to glance::
@@ -326,7 +346,7 @@ Create a CoreOS Kubernetes cluster. Use the CoreOS ClusterTemplate as a
 template for cluster creation::
 
     magnum cluster-create --name k8s-cluster \
-                      --cluster-template k8scluster-template-coreos \
+                      --cluster-template k8s-cluster-template-coreos \
                       --node-count 2
 
 Using a Kubernetes Cluster
@@ -436,11 +456,13 @@ redis-master is running::
     | updated_at         | 2016-05-26T17:50:02+00:00                                  |
     | create_timeout     | 60                                                         |
     | api_address        | https://172.24.4.4:6443                                    |
+    | coe_version        | v1.2.0                                                     |
     | cluster_template_id| e73298e7-e621-4d42-b35b-7a1952b97158                       |
     | master_addresses   | ['172.24.4.6']                                             |
     | node_count         | 1                                                          |
     | node_addresses     | ['172.24.4.5']                                             |
     | master_count       | 1                                                          |
+    | container_version  | 1.9.1                                                      |
     | discovery_url      | https://discovery.etcd.io/4caaa65f297d4d49ef0a085a7aecf8e0 |
     | name               | k8s-cluster                                                |
     +--------------------+------------------------------------------------------------+
@@ -493,7 +515,7 @@ except for the absence of some Kubernetes-specific arguments and the use of
 'swarm' as the COE::
 
     magnum cluster-template-create --name swarm-cluster-template \
-                           --image-id fedora-atomic-latest \
+                           --image-id fedora-atomic-newton \
                            --keypair-id testkey \
                            --external-network-id public \
                            --dns-nameserver 8.8.8.8 \
@@ -530,11 +552,13 @@ Now that we have a swarm cluster we can start interacting with it::
     | updated_at         | 2015-04-20T19:06:08+00:00                                  |
     | create_timeout     | 60                                                         |
     | api_address        | https://172.24.4.4:6443                                    |
+    | coe_version        | 1.0.0                                                      |
     | cluster_template_id| e73298e7-e621-4d42-b35b-7a1952b97158                       |
     | master_addresses   | ['172.24.4.6']                                             |
     | node_count         | 2                                                          |
     | node_addresses     | ['172.24.4.5']                                             |
     | master_count       | 1                                                          |
+    | container_version  | 1.9.1                                                      |
     | discovery_url      | https://discovery.etcd.io/4caaa65f297d4d49ef0a085a7aecf8e0 |
     | name               | swarm-cluster                                              |
     +--------------------+------------------------------------------------------------+
@@ -587,7 +611,7 @@ Set the CLI to use TLS . This env var is consumed by docker.::
 Set the correct host to use which is the public ip address of swarm API server
 endpoint. This env var is consumed by docker.::
 
-    export DOCKER_HOST=$(magnum cluster-show swarm-cluster | awk '/ api_address /{print substr($4,9)}')
+    export DOCKER_HOST=$(magnum cluster-show swarm-cluster | awk '/ api_address /{print substr($4,7)}')
 
 Next we will create a container in this swarm cluster. This container will ping
 the address 8.8.8.8 four times::
@@ -611,14 +635,14 @@ Building and Using a Mesos Cluster
 
 Provisioning a mesos cluster requires a Ubuntu-based image with some packages
 pre-installed. To build and upload such image, please refer to
-`<http://docs.openstack.org/developer/magnum/dev/mesos.html>`_
+`<http://docs.openstack.org/developer/magnum/userguide.html#building-mesos-image>`_
 
 Alternatively, you can download and upload a pre-built image::
 
-    wget https://fedorapeople.org/groups/magnum/ubuntu-14.04.3-mesos-0.25.0.qcow2
+    wget https://fedorapeople.org/groups/magnum/ubuntu-mesos-newton.qcow2
     glance image-create --name ubuntu-mesos --visibility public \
                         --disk-format=qcow2 --container-format=bare \
-                        --os-distro=ubuntu --file=ubuntu-14.04.3-mesos-0.25.0.qcow2
+                        --os-distro=ubuntu --file=ubuntu-mesos-newton.qcow2
 
 Then, create a ClusterTemplate by using 'mesos' as the COE, with the rest of
 arguments similar to the Kubernetes ClusterTemplate::
@@ -654,11 +678,13 @@ need to make sure the cluster's status is 'CREATE_COMPLETE'::
     | updated_at         | 2015-06-09T20:28:18+00:00                                  |
     | create_timeout     | 60                                                         |
     | api_address        | https://172.24.4.115:6443                                  |
+    | coe_version        | -                                                          |
     | cluster_template_id| 92dbda62-32d4-4435-88fc-8f42d514b347                       |
     | master_addresses   | ['172.24.4.115']                                           |
     | node_count         | 2                                                          |
     | node_addresses     | ['172.24.4.116', '172.24.4.117']                           |
     | master_count       | 1                                                          |
+    | container_version  | 1.9.1                                                      |
     | discovery_url      | None                                                       |
     | name               | mesos-cluster                                              |
     +--------------------+------------------------------------------------------------+
@@ -709,4 +735,3 @@ creates a virtual environment to run in.
 When complete, the documentation can be accessed from::
 
     doc/build/html/index.html
-
