@@ -25,12 +25,12 @@ function function_exists {
 # Set up all necessary test data
 function create_test_data {
     # First we test Magnum's command line to see if we can stand up
-    # a baymodel, bay and a pod
+    # a cluster_template, cluster and a pod
 
     coe=$1
     special=$2
     if [ $coe == 'mesos' ]; then
-        local image_name="ubuntu-14.04"
+        local image_name="ubuntu.*mesos"
         local container_format="bare"
     elif [ $coe == 'k8s-coreos' ]; then
         local image_name="coreos"

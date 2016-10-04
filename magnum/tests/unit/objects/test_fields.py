@@ -17,10 +17,10 @@ from oslo_versionedobjects.tests import test_fields
 from magnum.objects import fields
 
 
-class TestBayStatus(test_fields.TestField):
+class TestClusterStatus(test_fields.TestField):
     def setUp(self):
-        super(TestBayStatus, self).setUp()
-        self.field = fields.BayStatusField()
+        super(TestClusterStatus, self).setUp()
+        self.field = fields.ClusterStatusField()
         self.coerce_good_values = [('CREATE_IN_PROGRESS',
                                     'CREATE_IN_PROGRESS'),
                                    ('CREATE_FAILED', 'CREATE_FAILED'),
@@ -71,10 +71,10 @@ class TestContainerStatus(test_fields.TestField):
         self.assertRaises(ValueError, self.field.stringify, 'DELETED')
 
 
-class TestBayType(test_fields.TestField):
+class TestClusterType(test_fields.TestField):
     def setUp(self):
-        super(TestBayType, self).setUp()
-        self.field = fields.BayTypeField()
+        super(TestClusterType, self).setUp()
+        self.field = fields.ClusterTypeField()
         self.coerce_good_values = [('kubernetes', 'kubernetes'),
                                    ('swarm', 'swarm'),
                                    ('mesos', 'mesos'), ]
@@ -86,6 +86,24 @@ class TestBayType(test_fields.TestField):
     def test_stringify(self):
         self.assertEqual("'kubernetes'",
                          self.field.stringify('kubernetes'))
+
+    def test_stringify_invalid(self):
+        self.assertRaises(ValueError, self.field.stringify, 'invalid')
+
+
+class TestMagnumServiceBinary(test_fields.TestField):
+    def setUp(self):
+        super(TestMagnumServiceBinary, self).setUp()
+        self.field = fields.MagnumServiceBinaryField()
+        self.coerce_good_values = [('magnum-conductor', 'magnum-conductor')]
+        self.coerce_bad_values = ['invalid']
+
+        self.to_primitive_values = self.coerce_good_values[0:1]
+        self.from_primitive_values = self.coerce_good_values[0:1]
+
+    def test_stringify(self):
+        self.assertEqual("'magnum-conductor'",
+                         self.field.stringify('magnum-conductor'))
 
     def test_stringify_invalid(self):
         self.assertRaises(ValueError, self.field.stringify, 'invalid')

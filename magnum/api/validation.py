@@ -24,64 +24,76 @@ from magnum.i18n import _
 from magnum import objects
 
 
-baymodel_opts = [
+cluster_template_opts = [
     cfg.ListOpt('kubernetes_allowed_network_drivers',
                 default=['all'],
-                help=_("Allowed network drivers for kubernetes baymodels. "
-                       "Use 'all' keyword to allow all drivers supported "
-                       "for kubernetes baymodels. Supported network drivers "
-                       "include flannel.")),
+                help=_("Allowed network drivers for kubernetes "
+                       "cluster-templates. Use 'all' keyword to allow all "
+                       "drivers supported for kubernetes cluster-templates. "
+                       "Supported network drivers include flannel."),
+                deprecated_group='baymodel'),
     cfg.StrOpt('kubernetes_default_network_driver',
                default='flannel',
-               help=_("Default network driver for kubernetes baymodels.")),
+               help=_("Default network driver for kubernetes "
+                      "cluster-templates."),
+               deprecated_group='baymodel'),
     cfg.ListOpt('swarm_allowed_network_drivers',
                 default=['all'],
-                help=_("Allowed network drivers for docker swarm baymodels. "
-                       "Use 'all' keyword to allow all drivers supported "
-                       "for swarm baymodels. Supported network drivers "
-                       "include docker and flannel.")),
+                help=_("Allowed network drivers for docker swarm "
+                       "cluster-templates. Use 'all' keyword to allow all "
+                       "drivers supported for swarm cluster-templates. "
+                       "Supported network drivers include docker and flannel."
+                       ),
+                deprecated_group='baymodel'),
     cfg.StrOpt('swarm_default_network_driver',
                default='docker',
-               help=_("Default network driver for docker swarm baymodels.")),
+               help=_("Default network driver for docker swarm "
+                      "cluster-templates."),
+               deprecated_group='baymodel'),
     cfg.ListOpt('mesos_allowed_network_drivers',
                 default=['all'],
-                help=_("Allowed network drivers for mesos baymodels. "
+                help=_("Allowed network drivers for mesos cluster-templates. "
                        "Use 'all' keyword to allow all drivers supported "
-                       "for mesos baymodels. Supported network drivers "
-                       "include docker.")),
+                       "for mesos cluster-templates. Supported network "
+                       "drivers include docker."),
+                deprecated_group='baymodel'),
     cfg.StrOpt('mesos_default_network_driver',
                default='docker',
-               help=_("Default network driver for mesos baymodels.")),
+               help=_("Default network driver for mesos cluster-templates."),
+               deprecated_group='baymodel'),
 ]
-cfg.CONF.register_opts(baymodel_opts, group='baymodel')
+cfg.CONF.register_opts(cluster_template_opts, group='cluster_template')
 
 
-bay_update_allowed_properties = set(['node_count'])
+cluster_update_allowed_properties = set(['node_count'])
 
 
-def enforce_bay_types(*bay_types):
-    """Enforce that bay_type is in supported list."""
+def enforce_cluster_types(*cluster_types):
+    """Enforce that cluster_type is in supported list."""
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
         # Note(eliqiao): This decorator has some assumptions
         # args[1] should be an APIBase instance or
-        # args[2] should be a bay_ident
+        # args[2] should be a cluster_ident
         obj = args[1]
-        if hasattr(obj, 'bay_uuid'):
-            bay = objects.Bay.get_by_uuid(pecan.request.context, obj.bay_uuid)
+        if hasattr(obj, 'cluster_uuid'):
+            cluster = objects.Cluster.get_by_uuid(pecan.request.context,
+                                                  obj.cluster_uuid)
         else:
-            bay_ident = args[2]
-            if uuidutils.is_uuid_like(bay_ident):
-                bay = objects.Bay.get_by_uuid(pecan.request.context, bay_ident)
+            cluster_ident = args[2]
+            if uuidutils.is_uuid_like(cluster_ident):
+                cluster = objects.Cluster.get_by_uuid(pecan.request.context,
+                                                      cluster_ident)
             else:
-                bay = objects.Bay.get_by_name(pecan.request.context, bay_ident)
+                cluster = objects.Cluster.get_by_name(pecan.request.context,
+                                                      cluster_ident)
 
-        if bay.baymodel.coe not in bay_types:
+        if cluster.cluster_template.coe not in cluster_types:
             raise exception.InvalidParameterValue(_(
-                'Cannot fulfill request with a %(bay_type)s bay, '
-                'expecting a %(supported_bay_types)s bay.') %
-                {'bay_type': bay.baymodel.coe,
-                 'supported_bay_types': '/'.join(bay_types)})
+                'Cannot fulfill request with a %(cluster_type)s cluster, '
+                'expecting a %(supported_cluster_types)s cluster.') %
+                {'cluster_type': cluster.cluster_template.coe,
+                 'supported_cluster_types': '/'.join(cluster_types)})
 
         return func(*args, **kwargs)
 
@@ -91,8 +103,8 @@ def enforce_bay_types(*bay_types):
 def enforce_network_driver_types_create():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
-        baymodel = args[1]
-        _enforce_network_driver_types(baymodel)
+        cluster_template = args[1]
+        _enforce_network_driver_types(cluster_template)
         return func(*args, **kwargs)
 
     return wrapper
@@ -101,33 +113,35 @@ def enforce_network_driver_types_create():
 def enforce_network_driver_types_update():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
-        baymodel_ident = args[1]
+        cluster_template_ident = args[1]
         patch = args[2]
-        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        cluster_template = api_utils.get_resource('ClusterTemplate',
+                                                  cluster_template_ident)
         try:
-            baymodel_dict = api_utils.apply_jsonpatch(baymodel.as_dict(),
-                                                      patch)
+            cluster_template_dict = api_utils.apply_jsonpatch(
+                cluster_template.as_dict(), patch)
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
-        baymodel = objects.BayModel(pecan.request.context, **baymodel_dict)
-        _enforce_network_driver_types(baymodel)
+        cluster_template = objects.ClusterTemplate(pecan.request.context,
+                                                   **cluster_template_dict)
+        _enforce_network_driver_types(cluster_template)
         return func(*args, **kwargs)
 
     return wrapper
 
 
-def _enforce_network_driver_types(baymodel):
-    validator = Validator.get_coe_validator(baymodel.coe)
-    if not baymodel.network_driver:
-        baymodel.network_driver = validator.default_network_driver
-    validator.validate_network_driver(baymodel.network_driver)
+def _enforce_network_driver_types(cluster_template):
+    validator = Validator.get_coe_validator(cluster_template.coe)
+    if not cluster_template.network_driver:
+        cluster_template.network_driver = validator.default_network_driver
+    validator.validate_network_driver(cluster_template.network_driver)
 
 
 def enforce_volume_driver_types_create():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
-        baymodel = args[1]
-        _enforce_volume_driver_types(baymodel.as_dict())
+        cluster_template = args[1]
+        _enforce_volume_driver_types(cluster_template.as_dict())
         return func(*args, **kwargs)
 
     return wrapper
@@ -136,8 +150,8 @@ def enforce_volume_driver_types_create():
 def enforce_volume_storage_size_create():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
-        baymodel = args[1]
-        _enforce_volume_storage_size(baymodel.as_dict())
+        cluster_template = args[1]
+        _enforce_volume_storage_size(cluster_template.as_dict())
         return func(*args, **kwargs)
 
     return wrapper
@@ -146,32 +160,33 @@ def enforce_volume_storage_size_create():
 def enforce_volume_driver_types_update():
     @decorator.decorator
     def wrapper(func, *args, **kwargs):
-        baymodel_ident = args[1]
+        cluster_template_ident = args[1]
         patch = args[2]
-        baymodel = api_utils.get_resource('BayModel', baymodel_ident)
+        cluster_template = api_utils.get_resource('ClusterTemplate',
+                                                  cluster_template_ident)
         try:
-            baymodel_dict = api_utils.apply_jsonpatch(baymodel.as_dict(),
-                                                      patch)
+            cluster_template_dict = api_utils.apply_jsonpatch(
+                cluster_template.as_dict(), patch)
         except api_utils.JSONPATCH_EXCEPTIONS as e:
             raise exception.PatchError(patch=patch, reason=e)
-        _enforce_volume_driver_types(baymodel_dict)
+        _enforce_volume_driver_types(cluster_template_dict)
         return func(*args, **kwargs)
 
     return wrapper
 
 
-def _enforce_volume_driver_types(baymodel):
-    validator = Validator.get_coe_validator(baymodel['coe'])
-    if not baymodel.get('volume_driver'):
+def _enforce_volume_driver_types(cluster_template):
+    validator = Validator.get_coe_validator(cluster_template['coe'])
+    if not cluster_template.get('volume_driver'):
         return
-    validator.validate_volume_driver(baymodel['volume_driver'])
+    validator.validate_volume_driver(cluster_template['volume_driver'])
 
 
-def _enforce_volume_storage_size(baymodel):
-    if not baymodel.get('docker_volume_size'):
+def _enforce_volume_storage_size(cluster_template):
+    if not cluster_template.get('docker_volume_size'):
         return
-    volume_size = baymodel.get('docker_volume_size')
-    storage_driver = baymodel.get('docker_storage_driver')
+    volume_size = cluster_template.get('docker_volume_size')
+    storage_driver = cluster_template.get('docker_storage_driver')
     if storage_driver == 'devicemapper':
         if volume_size < 3:
             raise exception.InvalidParameterValue(
@@ -180,11 +195,11 @@ def _enforce_volume_storage_size(baymodel):
                 'driver.') % (volume_size, storage_driver)
 
 
-def validate_bay_properties(delta):
+def validate_cluster_properties(delta):
 
-    update_disallowed_properties = delta - bay_update_allowed_properties
+    update_disallowed_properties = delta - cluster_update_allowed_properties
     if update_disallowed_properties:
-        err = (_("cannot change bay property(ies) %s.") %
+        err = (_("cannot change cluster property(ies) %s.") %
                ", ".join(update_disallowed_properties))
         raise exception.InvalidParameterValue(err=err)
 
@@ -251,9 +266,9 @@ class K8sValidator(Validator):
 
     supported_network_drivers = ['flannel']
     allowed_network_drivers = (
-        cfg.CONF.baymodel.kubernetes_allowed_network_drivers)
+        cfg.CONF.cluster_template.kubernetes_allowed_network_drivers)
     default_network_driver = (
-        cfg.CONF.baymodel.kubernetes_default_network_driver)
+        cfg.CONF.cluster_template.kubernetes_default_network_driver)
 
     supported_volume_driver = ['cinder']
 
@@ -261,8 +276,10 @@ class K8sValidator(Validator):
 class SwarmValidator(Validator):
 
     supported_network_drivers = ['docker', 'flannel']
-    allowed_network_drivers = cfg.CONF.baymodel.swarm_allowed_network_drivers
-    default_network_driver = cfg.CONF.baymodel.swarm_default_network_driver
+    allowed_network_drivers = (cfg.CONF.cluster_template.
+                               swarm_allowed_network_drivers)
+    default_network_driver = (cfg.CONF.cluster_template.
+                              swarm_default_network_driver)
 
     supported_volume_driver = ['rexray']
 
@@ -270,7 +287,9 @@ class SwarmValidator(Validator):
 class MesosValidator(Validator):
 
     supported_network_drivers = ['docker']
-    allowed_network_drivers = cfg.CONF.baymodel.mesos_allowed_network_drivers
-    default_network_driver = cfg.CONF.baymodel.mesos_default_network_driver
+    allowed_network_drivers = (cfg.CONF.cluster_template.
+                               mesos_allowed_network_drivers)
+    default_network_driver = (cfg.CONF.cluster_template.
+                              mesos_default_network_driver)
 
     supported_volume_driver = ['rexray']

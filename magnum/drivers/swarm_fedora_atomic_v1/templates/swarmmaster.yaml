@@ -30,9 +30,9 @@ parameters:
     type: string
     description: url provided for node discovery
 
-  bay_uuid:
+  cluster_uuid:
     type: string
-    description: identifier for the bay this template is generating
+    description: identifier for the cluster this template is generating
 
   magnum_url:
     type: string
@@ -143,6 +143,18 @@ parameters:
     type: string
     description: url for keystone
 
+  volume_driver:
+    type: string
+    description: volume driver to use for container storage
+    default: ""
+
+  rexray_preempt:
+    type: string
+    description: >
+      enables any host to take control of a volume irrespective of whether
+      other hosts are using the volume
+    default: "false"
+
 resources:
 
   master_wait_handle:
@@ -158,7 +170,7 @@ resources:
   ######################################################################
   #
   # resource that exposes the IPs of either the Swarm master or the API
-  # LBaaS pool depending on whether LBaaS is enabled for the bay.
+  # LBaaS pool depending on whether LBaaS is enabled for the cluster.
   #
 
   api_address_switch:
@@ -199,7 +211,7 @@ resources:
             "$NO_PROXY": {get_param: no_proxy}
             "$SWARM_API_IP": {get_attr: [api_address_switch, private_ip]}
             "$SWARM_NODE_IP": {get_attr: [swarm_master_eth0, fixed_ips, 0, ip_address]}
-            "$BAY_UUID": {get_param: bay_uuid}
+            "$CLUSTER_UUID": {get_param: cluster_uuid}
             "$MAGNUM_URL": {get_param: magnum_url}
             "$TLS_DISABLED": {get_param: tls_disabled}
             "$NETWORK_DRIVER": {get_param: network_driver}
@@ -213,6 +225,8 @@ resources:
             "$TRUSTEE_PASSWORD": {get_param: trustee_password}
             "$TRUST_ID": {get_param: trust_id}
             "$AUTH_URL": {get_param: auth_url}
+            "$VOLUME_DRIVER": {get_param: volume_driver}
+            "$REXRAY_PREEMPT": {get_param: rexray_preempt}
 
   write_network_config:
     type: "OS::Heat::SoftwareConfig"
@@ -252,7 +266,7 @@ resources:
         str_replace:
           params:
             $configure_docker_storage_driver: {get_file: ../../common/templates/fragments/configure_docker_storage_driver_atomic.sh}
-          template: {get_file: fragments/configure-docker-storage.sh}
+          template: {get_file: ../../common/templates/fragments/configure-docker-storage.sh}
 
   make_cert:
     type: "OS::Heat::SoftwareConfig"
@@ -272,7 +286,7 @@ resources:
       group: ungrouped
       config:
         str_replace:
-          template: {get_file: fragments/write-bay-failure-service.yaml}
+          template: {get_file: fragments/write-cluster-failure-service.yaml}
           params:
             "$SERVICE": swarm-manager
             "$WAIT_HANDLE_ENDPOINT": {get_attr: [master_wait_handle, endpoint]}
@@ -330,6 +344,12 @@ resources:
       group: ungrouped
       config: {get_file: fragments/add-proxy.sh}
 
+  volume_service:
+    type: "OS::Heat::SoftwareConfig"
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/volume-service.sh}
+
   swarm_master_init:
     type: "OS::Heat::MultipartMime"
     properties:
@@ -350,6 +370,7 @@ resources:
         - config: {get_resource: add_proxy}
         - config: {get_resource: enable_services}
         - config: {get_resource: cfn_signal}
+        - config: {get_resource: volume_service}
 
   ######################################################################
   #
@@ -394,17 +415,19 @@ resources:
         get_resource: swarm_master_eth0
 
   api_pool_member:
-    type: Magnum::Optional::Neutron::PoolMember
+    type: Magnum::Optional::Neutron::LBaaS::PoolMember
     properties:
-      pool_id: {get_param: api_pool_id}
+      pool: {get_param: api_pool_id}
       address: {get_attr: [swarm_master_eth0, fixed_ips, 0, ip_address]}
+      subnet: { get_param: fixed_subnet_id }
       protocol_port: {get_param: swarm_port}
 
   etcd_pool_member:
-    type: Magnum::Optional::Neutron::PoolMember
+    type: Magnum::Optional::Neutron::LBaaS::PoolMember
     properties:
-      pool_id: {get_param: etcd_pool_id}
+      pool: {get_param: etcd_pool_id}
       address: {get_attr: [swarm_master_eth0, fixed_ips, 0, ip_address]}
+      subnet: { get_param: fixed_subnet_id }
       protocol_port: 2379
 
   ######################################################################

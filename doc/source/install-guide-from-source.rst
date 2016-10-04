@@ -1,8 +1,8 @@
 .. _install:
 
-==========================
-Install Magnum from source
-==========================
+===================================================================
+Install the Container Infrastructure Management service from source
+===================================================================
 
 Install and configure
 ~~~~~~~~~~~~~~~~~~~~~
@@ -11,29 +11,37 @@ This section describes how to install and configure the Container
 Infrastructure Management service, code-named magnum, on the controller node.
 
 This section assumes that you already have a working OpenStack environment with
-at least the following components installed: Compute, Image Service, Identity,
-Networking, Block Storage, Orchestration and Neutron/LBaaS. See `OpenStack
-Install Guides <http://docs.openstack.org/#install-guides>`__ for all the above
-services apart from Neutron/LBaaS. For Neutron/LBaaS see
-`Neutron/LBaaS/HowToRun
-<https://wiki.openstack.org/wiki/Neutron/LBaaS/HowToRun>`__.
+at least the following components installed: Identity service, Image service,
+Compute service, Networking service, Block Storage service and Orchestration
+service. See `OpenStack Install Guides <http://docs.openstack.org/
+#install-guides>`__.
 
-To store certificates, you can use Barbican (which is recommended) or save
-them locally on the controller node. To install Barbican see `Setting up a
-Barbican Development Environment <http://docs.openstack.org/developer/barbican/
-setup/dev.html#configuring-barbican>`__
+To provide access to Docker Swarm or Kubernetes using the native clients
+(docker or kubectl respectively) magnum uses TLS certificates. To store the
+certificates, it is recommended to use the `Key Manager service, code-named
+barbican <http://docs.openstack.org/project-install-guide/key-manager/
+draft/>`__, or you can save them in magnum's database.
 
-Optionally, you can install the following components: Object Storage to make
-private Docker registries available to users and Telemetry to send periodically
-magnum related metrics. See `OpenStack Install Guides
-<http://docs.openstack.org /#install-guides>`__.
+Optionally, you can install the following components:
+
+- `Load Balancer as a Service (LBaaS v2) <http://docs.openstack.org/
+  networking-guide/config-lbaas.html>`__ to create clusters with multiple
+  masters
+- `Bare Metal service <http://docs.openstack.org/project-install-guide/
+  baremetal/draft/>`__ to create baremetal clusters
+- `Object Storage service <http://docs.openstack.org/project-install-guide/
+  object-storage/draft/>`__ to make private Docker registries available to
+  users
+- `Telemetry Data Collection service <http://docs.openstack.org/
+  project-install-guide/telemetry/draft/>`__ to periodically send
+  magnum-related metrics
 
 .. important::
 
-   Magnum creates groupings of Nova compute instances, called clusters. These
-   VMs must have basic Internet connectivity and must be able to reach magnum's
-   API server. Make sure that Compute and Network services are configured
-   accordingly.
+   Magnum creates clusters of compute instances on the Compute service (nova).
+   These instances must have basic Internet connectivity and must be able to
+   reach magnum's API server. Make sure that the Compute and Network services
+   are configured accordingly.
 
 Prerequisites
 -------------
@@ -401,9 +409,9 @@ Install and configure components
         memcached_servers = controller:11211
         auth_version = v3
         auth_uri = http://controller:5000/v3
-        project_domain_id = default
+        project_domain_name = default
         project_name = service
-        user_domain_id = default
+        user_domain_name = default
         password = MAGNUM_PASS
         username = magnum
         auth_url = http://controller:35357
@@ -411,13 +419,13 @@ Install and configure components
 
         [trust]
         ...
-        trustee_domain_id = 66e0469de9c04eda9bc368e001676d20
-        trustee_domain_admin_id = 529b81cf35094beb9784c6d06c090c2b
+        trustee_domain_name = magnum
+        trustee_domain_admin_name = magnum_domain_admin
         trustee_domain_admin_password = DOMAIN_ADMIN_PASS
 
-     ``trustee_domain_id`` is the id of the ``magnum`` domain and
-     ``trustee_domain_admin_id`` is the id of the ``magnum_domain_admin`` user.
-     Replace MAGNUM_PASS with the password you chose for the magnum user in the
+     ``trustee_domain_name`` is the name of the ``magnum`` domain and
+     ``trustee_domain_admin_name`` is the name of the ``magnum_domain_admin``
+     user. Replace MAGNUM_PASS with the password you chose for the magnum user in the
      Identity service and DOMAIN_ADMIN_PASS with the password you chose for the
      ``magnum_domain_admin`` user.
 
@@ -498,7 +506,7 @@ Finalize installation
         # cp doc/examples/etc/systemd/system/magnum-conductor.service \
           /etc/systemd/system/magnum-conductor.service
 
-#. Start magnum-api and magnum-conductor
+#. Start magnum-api and magnum-conductor:
 
    * Ubuntu 14.04 (trusty):
 
@@ -520,7 +528,7 @@ Finalize installation
         # systemctl start magnum-api
         # systemctl start magnum-conductor
 
-#. Verify that magnum-api and magnum-conductor services are running
+#. Verify that magnum-api and magnum-conductor services are running:
 
    * Ubuntu 14.04 (trusty):
 
@@ -536,3 +544,69 @@ Finalize installation
 
         # systemctl status magnum-api
         # systemctl status magnum-conductor
+
+Install the command-line client
+-------------------------------
+
+#. Install OS-specific prerequisites:
+
+   * Fedora 21/RHEL 7/CentOS 7
+
+     .. code-block:: console
+
+        # yum install python-devel openssl-devel python-virtualenv \
+                      libffi-devel git gcc
+
+   * Fedora 22 or higher
+
+     .. code-block:: console
+
+        # dnf install python-devel openssl-devel python-virtualenv \
+                      libffi-devel git gcc
+
+   * Ubuntu/Debian
+
+     .. code-block:: console
+
+        # apt-get update
+        # apt-get install python-dev libssl-dev python-virtualenv \
+                          libffi-dev git gcc
+
+   * openSUSE Leap 42.1
+
+     .. code-block:: console
+
+        # zypper install python-devel libopenssl-devel python-virtualenv \
+                         libffi-devel git gcc
+
+#. Install the client in a virtual environment:
+
+   .. code-block:: console
+
+      $ cd ~
+      $ git clone https://git.openstack.org/openstack/python-magnumclient.git
+      $ cd python-magnumclient
+      $ virtualenv .magnumclient-env
+      $ .magnumclient-env/bin/pip install -r requirements.txt
+      $ .magnumclient-env/bin/python setup.py install
+
+#. Now, you can export the client in your PATH:
+
+   .. code-block:: console
+
+      $ export PATH=$PATH:${PWD}/.magnumclient-env/bin/magnum
+
+   .. note::
+
+      The command-line client can be installed on the controller node or
+      on a different host than the service. It is good practice to install it
+      as a non-root user.
+
+Next Steps
+----------
+
+Since you have the Container Infrastructure Management service running, you
+can `Verify Operation <http://docs.openstack.org/project-install-guide/
+container-infrastructure-management/draft/verify.html>`__ and `Launch an
+instance <http://docs.openstack.org/project-install-guide/
+container-infrastructure-management/draft/launch-instance.html>`__.

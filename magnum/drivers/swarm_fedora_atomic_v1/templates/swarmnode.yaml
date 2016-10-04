@@ -71,9 +71,9 @@ parameters:
     type: string
     description: swarm master's api server public ip address
 
-  bay_uuid:
+  cluster_uuid:
     type: string
-    description: identifier for the bay this template is generating
+    description: identifier for the cluster this template is generating
 
   magnum_url:
     type: string
@@ -149,6 +149,18 @@ parameters:
     description: >
       size fo the data segments for the swift dynamic large objects
 
+  volume_driver:
+    type: string
+    description: volume driver to use for container storage
+    default: ""
+
+  rexray_preempt:
+    type: string
+    description: >
+      enables any host to take control of a volume irrespective of whether
+      other hosts are using the volume
+    default: "false"
+
 resources:
 
   node_wait_handle:
@@ -183,7 +195,7 @@ resources:
             "$NO_PROXY": {get_param: no_proxy}
             "$SWARM_API_IP": {get_param: swarm_api_ip}
             "$SWARM_NODE_IP": {get_attr: [swarm_node_eth0, fixed_ips, 0, ip_address]}
-            "$BAY_UUID": {get_param: bay_uuid}
+            "$CLUSTER_UUID": {get_param: cluster_uuid}
             "$MAGNUM_URL": {get_param: magnum_url}
             "$TLS_DISABLED": {get_param: tls_disabled}
             "$NETWORK_DRIVER": {get_param: network_driver}
@@ -202,6 +214,8 @@ resources:
             "$REGISTRY_CONTAINER": {get_param: registry_container}
             "$REGISTRY_INSECURE": {get_param: registry_insecure}
             "$REGISTRY_CHUNKSIZE": {get_param: registry_chunksize}
+            "$VOLUME_DRIVER": {get_param: volume_driver}
+            "$REXRAY_PREEMPT": {get_param: rexray_preempt}
 
   remove_docker_key:
     type: "OS::Heat::SoftwareConfig"
@@ -223,7 +237,7 @@ resources:
         str_replace:
           params:
             $configure_docker_storage_driver: {get_file: ../../common/templates/fragments/configure_docker_storage_driver_atomic.sh}
-          template: {get_file: fragments/configure-docker-storage.sh}
+          template: {get_file: ../../common/templates/fragments/configure-docker-storage.sh}
 
   configure_docker_registry:
     type: OS::Heat::SoftwareConfig
@@ -255,7 +269,7 @@ resources:
       group: ungrouped
       config:
         str_replace:
-          template: {get_file: fragments/write-bay-failure-service.yaml}
+          template: {get_file: fragments/write-cluster-failure-service.yaml}
           params:
             "$SERVICE": swarm-agent
             "$WAIT_HANDLE_ENDPOINT": {get_attr: [node_wait_handle, endpoint]}
@@ -271,7 +285,7 @@ resources:
     type: OS::Heat::SoftwareConfig
     properties:
       group: ungrouped
-      config: {get_file: fragments/enable-docker-registry.sh}
+      config: {get_file: ../../common/templates/fragments/enable-docker-registry.sh}
 
   enable_services:
     type: "OS::Heat::SoftwareConfig"
@@ -301,6 +315,12 @@ resources:
       group: ungrouped
       config: {get_file: fragments/add-proxy.sh}
 
+  volume_service:
+    type: "OS::Heat::SoftwareConfig"
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/volume-service.sh}
+
   swarm_node_init:
     type: "OS::Heat::MultipartMime"
     properties:
@@ -320,6 +340,7 @@ resources:
         - config: {get_resource: enable_docker_registry}
         - config: {get_resource: enable_services}
         - config: {get_resource: cfn_signal}
+        - config: {get_resource: volume_service}
 
   swarm_node:
     type: "OS::Nova::Server"

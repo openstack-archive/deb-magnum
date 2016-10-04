@@ -228,8 +228,8 @@ class TestPatch(api_base.FunctionalTest):
 
     def test_update_cluster_template_with_cluster(self):
         cluster_template = obj_utils.create_test_cluster_template(self.context)
-        obj_utils.create_test_cluster(self.context,
-                                      baymodel_id=cluster_template.uuid)
+        obj_utils.create_test_cluster(
+            self.context, cluster_template_id=cluster_template.uuid)
 
         response = self.patch_json('/clustertemplates/%s' %
                                    cluster_template.uuid,
@@ -267,8 +267,8 @@ class TestPatch(api_base.FunctionalTest):
 
     def test_update_cluster_template_with_cluster_allow_update(self):
         cluster_template = obj_utils.create_test_cluster_template(self.context)
-        obj_utils.create_test_cluster(self.context,
-                                      baymodel_id=cluster_template.uuid)
+        obj_utils.create_test_cluster(
+            self.context, cluster_template_id=cluster_template.uuid)
         response = self.patch_json('/clustertemplates/%s' %
                                    cluster_template.uuid,
                                    [{'path': '/public',
@@ -282,8 +282,8 @@ class TestPatch(api_base.FunctionalTest):
 
     def test_update_cluster_template_with_cluster_not_allow_update(self):
         cluster_template = obj_utils.create_test_cluster_template(self.context)
-        obj_utils.create_test_cluster(self.context,
-                                      baymodel_id=cluster_template.uuid)
+        obj_utils.create_test_cluster(
+            self.context, cluster_template_id=cluster_template.uuid)
         response = self.patch_json('/clustertemplates/%s' %
                                    cluster_template.uuid,
                                    [{'path': '/name',
@@ -509,8 +509,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_set_project_id_and_user_id(
             self, mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data()
@@ -524,8 +525,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_doesnt_contain_id(self,
                                                        mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(image_id='my-image')
@@ -537,8 +539,9 @@ class TestPost(api_base.FunctionalTest):
 
     def _create_model_raises_app_error(self, **kwargs):
         # Create mock for db and image data
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock,\
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock,\
             mock.patch('magnum.api.attr_validator.validate_image')\
                 as mock_image_data:
             mock_image_data.return_value = {'name': 'mock_name',
@@ -597,8 +600,9 @@ class TestPost(api_base.FunctionalTest):
 
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_with_labels(self, mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(
@@ -612,8 +616,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_with_docker_volume_size(self,
                                                              mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(docker_volume_size=99)
@@ -625,8 +630,9 @@ class TestPost(api_base.FunctionalTest):
 
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_with_overlay(self, mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(
@@ -647,9 +653,11 @@ class TestPost(api_base.FunctionalTest):
         mock_image_data.return_value = {'name': 'mock_name',
                                         'os_distro': 'fedora-atomic'}
         for k, v in cluster_template_config_dict.items():
-                    cfg.CONF.set_override(k, v, 'baymodel')
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+                    cfg.CONF.set_override(k, v, 'cluster_template')
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
+
             bdict = apiutils.cluster_template_post_data(
                 **cluster_template_dict)
             response = self.post_json('/clustertemplates', bdict,
@@ -660,7 +668,7 @@ class TestPost(api_base.FunctionalTest):
                 expected_driver = bdict.get('network_driver')
                 if not expected_driver:
                     expected_driver = (
-                        cfg.CONF.baymodel.swarm_default_network_driver)
+                        cfg.CONF.cluster_template.swarm_default_network_driver)
                 self.assertEqual(expected_driver,
                                  response.json['network_driver'])
                 self.assertEqual(bdict['image_id'],
@@ -713,8 +721,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_with_volume_driver(self,
                                                         mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(volume_driver='rexray')
@@ -727,8 +736,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_with_no_volume_driver(self,
                                                            mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data()
@@ -742,8 +752,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch.object(magnum_policy, 'enforce')
     def test_create_cluster_template_public_success(self, mock_policy,
                                                     mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_policy.return_value = True
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
@@ -761,8 +772,8 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch.object(magnum_policy, 'enforce')
     def test_create_cluster_template_public_fail(self, mock_policy,
                                                  mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel):
+        with mock.patch.object(self.dbapi, 'create_cluster_template',
+                               wraps=self.dbapi.create_cluster_template):
             # make policy enforcement fail
             mock_policy.return_value = False
             mock_image_data.return_value = {'name': 'mock_name',
@@ -775,8 +786,9 @@ class TestPost(api_base.FunctionalTest):
     @mock.patch.object(magnum_policy, 'enforce')
     def test_create_cluster_template_public_not_set(self, mock_policy,
                                                     mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel) as cc_mock:
+        with mock.patch.object(
+                self.dbapi, 'create_cluster_template',
+                wraps=self.dbapi.create_cluster_template) as cc_mock:
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data(public=False)
@@ -926,8 +938,8 @@ class TestPost(api_base.FunctionalTest):
 
     @mock.patch('magnum.api.attr_validator.validate_image')
     def test_create_cluster_template_without_name(self, mock_image_data):
-        with mock.patch.object(self.dbapi, 'create_baymodel',
-                               wraps=self.dbapi.create_baymodel):
+        with mock.patch.object(self.dbapi, 'create_cluster_template',
+                               wraps=self.dbapi.create_cluster_template):
             mock_image_data.return_value = {'name': 'mock_name',
                                             'os_distro': 'fedora-atomic'}
             bdict = apiutils.cluster_template_post_data()
@@ -951,8 +963,8 @@ class TestDelete(api_base.FunctionalTest):
 
     def test_delete_cluster_template_with_cluster(self):
         cluster_template = obj_utils.create_test_cluster_template(self.context)
-        obj_utils.create_test_cluster(self.context,
-                                      baymodel_id=cluster_template.uuid)
+        obj_utils.create_test_cluster(
+            self.context, cluster_template_id=cluster_template.uuid)
         response = self.delete('/clustertemplates/%s' % cluster_template.uuid,
                                expect_errors=True)
         self.assertEqual(400, response.status_int)
