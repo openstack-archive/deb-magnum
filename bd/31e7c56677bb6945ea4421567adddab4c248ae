@@ -1,0 +1,11 @@
+Code-Review+1: Hieu LE <hieulq@vn.fujitsu.com>
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: pawnesh kumar <pawnesh.kumar@nectechnologies.in>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 06 Oct 2016 09:10:37 +0000
+Reviewed-on: https://review.openstack.org/379207
+Project: openstack/deb-magnum
+Branch: refs/heads/master
