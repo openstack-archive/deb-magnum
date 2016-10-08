@@ -1,0 +1,10 @@
+Code-Review+1: Stephen Watson <stephen.watson@intel.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+2: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Workflow+1: Vilobh Meshram <vilobhmm@yahoo-inc.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 07 Oct 2016 21:33:20 +0000
+Reviewed-on: https://review.openstack.org/376362
+Project: openstack/deb-magnum
+Branch: refs/heads/master

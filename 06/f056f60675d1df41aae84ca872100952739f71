@@ -1,0 +1,11 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: Ricardo Rocha <rocha.porto@gmail.com>
+Code-Review-1: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Adrian Otto <adrian.otto@rackspace.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 07 Oct 2016 23:30:00 +0000
+Reviewed-on: https://review.openstack.org/381307
+Project: openstack/deb-magnum
+Branch: refs/heads/master
