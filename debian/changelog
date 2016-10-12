@@ -1,3 +1,9 @@
+magnum (3.1.1-1) unstable; urgency=medium
+
+  * Fixed missing Alembic migration scripts (LP: #1632743).
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 12 Oct 2016 23:58:31 +0200
+
 magnum (3.1.1-0) unstable; urgency=medium
 
   [ Ondřej Nový ]
