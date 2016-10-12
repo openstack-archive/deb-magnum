@@ -177,6 +177,7 @@ Depends: magnum-common (= ${binary:Version}),
          python-openstackclient,
          q-text-as-data,
          ${misc:Depends},
+         ${ostack-lsb-base},
          ${python:Depends},
 Description: OpenStack containers as a service
  Magnum is an OpenStack project which offers container orchestration engines
@@ -194,6 +195,7 @@ Package: magnum-conductor
 Architecture: all
 Depends: magnum-common (= ${binary:Version}),
          ${misc:Depends},
+         ${ostack-lsb-base},
          ${python:Depends},
 Description: OpenStack containers as a service - conductor
  Magnum is an OpenStack project which offers container orchestration engines
