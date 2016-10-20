@@ -1,0 +1,10 @@
+Code-Review+1: Pradeep Kumar Singh <ps4openstack@gmail.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 20 Oct 2016 07:25:10 +0000
+Reviewed-on: https://review.openstack.org/387367
+Project: openstack/deb-magnum
+Branch: refs/heads/master
