@@ -1,0 +1,10 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 04 Nov 2016 04:09:29 +0000
+Reviewed-on: https://review.openstack.org/391779
+Project: openstack/deb-magnum
+Branch: refs/heads/master
