@@ -1,0 +1,9 @@
+Code-Review+1: fengbeihong <fengbeihong@gmail.com>
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 04 Nov 2016 06:40:53 +0000
+Reviewed-on: https://review.openstack.org/393323
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
