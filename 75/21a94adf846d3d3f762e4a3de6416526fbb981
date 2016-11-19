@@ -1,0 +1,9 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+1: Rico Lin <rico.l@inwinstack.com>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 18 Nov 2016 16:27:03 +0000
+Reviewed-on: https://review.openstack.org/386509
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
