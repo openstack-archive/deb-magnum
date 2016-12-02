@@ -1,0 +1,9 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 01 Dec 2016 10:34:21 +0000
+Reviewed-on: https://review.openstack.org/405114
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
