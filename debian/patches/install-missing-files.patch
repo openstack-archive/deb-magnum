@@ -6,5 +6,6 @@ Last-Update: 2016-10-13
 
 --- /dev/null	2016-10-06 13:03:00.121460858 +0200
 +++ b/MANIFEST.in	2016-10-12 23:59:46.572018514 +0200
-@@ -0,0 +1 @@
+@@ -0,0 +2 @@
 +recursive-include magnum/db *
++recursive-include magnum/drivers *
