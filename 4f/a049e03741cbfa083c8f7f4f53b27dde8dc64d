@@ -1,0 +1,11 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+1: Kevin Lefevre <lefevre.kevin@gmail.com>
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+2: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Workflow+1: Motohiro/Yuanying Otsuka <yuanying@fraction.jp>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 07 Dec 2016 02:41:52 +0000
+Reviewed-on: https://review.openstack.org/404782
+Project: openstack/deb-magnum
+Branch: refs/heads/master
