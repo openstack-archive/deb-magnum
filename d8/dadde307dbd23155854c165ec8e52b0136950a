@@ -1,0 +1,11 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+1: Rico Lin <rico.lin.guanyu@gmail.com>
+Code-Review+1: PanFengyun <fengyun.pan@easystack.cn>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 07 Dec 2016 07:43:41 +0000
+Reviewed-on: https://review.openstack.org/403859
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/newton
