@@ -1,0 +1,12 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: venkatamahesh <Venkata.Kotha@infinite.com>
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+1: Rico Lin <rico.lin.guanyu@gmail.com>
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Workflow+1: yatin <yatin.karel@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 10 Dec 2016 06:30:00 +0000
+Reviewed-on: https://review.openstack.org/408096
+Project: openstack/deb-magnum
+Branch: refs/heads/master

@@ -1,0 +1,13 @@
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Workflow+1: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 09 Dec 2016 12:20:29 +0000
+Reviewed-on: https://review.openstack.org/396781
+Project: openstack/deb-magnum
+Branch: refs/heads/master
