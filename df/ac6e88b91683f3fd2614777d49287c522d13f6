@@ -1,0 +1,9 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Jaycen Grant <jaycen.v.grant@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 13 Dec 2016 22:44:29 +0000
+Reviewed-on: https://review.openstack.org/400593
+Project: openstack/deb-magnum
+Branch: refs/heads/master
