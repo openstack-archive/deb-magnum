@@ -5,6 +5,7 @@ magnum (3.1.1-2) unstable; urgency=medium
 
   [ Thomas Goirand ]
   * Add missing files (Closes: #847097).
+  * Allow SQLAlchemy >= 1.1.
 
  -- Thomas Goirand <zigo@debian.org>  Wed, 07 Dec 2016 16:53:30 +0100
 

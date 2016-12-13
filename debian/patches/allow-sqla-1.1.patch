@@ -1,0 +1,16 @@
+Description: Allow SQLAlchemy >= 1.1
+Author: Thomas Goirand <zigo@debian.org>
+Forwarded: no
+Last-Update: 2016-12-13
+
+--- magnum-3.1.1.orig/requirements.txt
++++ magnum-3.1.1/requirements.txt
+@@ -8,7 +8,7 @@
+ Babel>=2.3.4 # BSD
+ PrettyTable<0.8,>=0.7 # BSD
+ PyYAML>=3.1.0 # MIT
+-SQLAlchemy<1.1.0,>=1.0.10 # MIT
++SQLAlchemy>=1.0.10 # MIT
+ WSME>=0.8 # MIT
+ WebOb>=1.2.3 # MIT
+ alembic>=0.8.4 # MIT
