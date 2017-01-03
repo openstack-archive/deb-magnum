@@ -1,0 +1,8 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Workflow+1: Eli Qiao <qiaoliyong@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 26 Dec 2016 19:13:51 +0000
+Reviewed-on: https://review.openstack.org/414269
+Project: openstack/deb-magnum
+Branch: refs/heads/master
