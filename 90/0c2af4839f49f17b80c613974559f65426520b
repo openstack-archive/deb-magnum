@@ -1,0 +1,10 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+1: feng.shengqin <feng.shengqin@zte.com.cn>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: yatin <yatin.karel@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 15 Jan 2017 07:04:32 +0000
+Reviewed-on: https://review.openstack.org/416780
+Project: openstack/deb-magnum
+Branch: refs/heads/master
