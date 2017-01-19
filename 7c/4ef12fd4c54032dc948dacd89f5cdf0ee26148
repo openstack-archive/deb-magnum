@@ -1,0 +1,9 @@
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 17 Jan 2017 13:21:01 +0000
+Reviewed-on: https://review.openstack.org/420361
+Project: openstack/deb-magnum
+Branch: refs/heads/master
