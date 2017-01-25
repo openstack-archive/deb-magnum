@@ -1,0 +1,9 @@
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Workflow+1: yatin <yatin.karel@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 25 Jan 2017 04:58:09 +0000
+Reviewed-on: https://review.openstack.org/423710
+Project: openstack/deb-magnum
+Branch: refs/heads/master
