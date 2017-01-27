@@ -1,0 +1,11 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: Mathieu Velten <mathieu.velten@cern.ch>
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 26 Jan 2017 21:59:12 +0000
+Reviewed-on: https://review.openstack.org/425439
+Project: openstack/deb-magnum
+Branch: refs/heads/master
