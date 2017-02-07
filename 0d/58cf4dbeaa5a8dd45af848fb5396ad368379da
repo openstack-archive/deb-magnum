@@ -1,0 +1,10 @@
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+2: Hongbin Lu <hongbin.lu@huawei.com>
+Workflow+1: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+1: Kevin Lefevre <lefevre.kevin@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 06 Feb 2017 22:32:11 +0000
+Reviewed-on: https://review.openstack.org/429796
+Project: openstack/deb-magnum
+Branch: refs/heads/master
