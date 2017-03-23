@@ -1,0 +1,23 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: Jason Dunsmore <jason.dunsmore@rackspace.com>
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+1: Drago <drago.rosson@rackspace.com>
+Code-Review+2: Jaycen Grant <jaycen.v.grant@intel.com>
+Code-Review+1: Randall Burt <randall.burt@rackspace.com>
+Code-Review+1: PanFengyun <fengyun.pan@easystack.cn>
+Code-Review+1: ChangBo Guo(gcb) <glongwave@gmail.com>
+Code-Review+1: Bin Zhou <lakerzhou@gmail.com>
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+1: Stephen Watson <stephen.watson@intel.com>
+Code-Review+1: Morgan Fainberg <morgan.fainberg@gmail.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review-1: Hongbin Lu <hongbin.lu@huawei.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 24 Feb 2017 22:27:26 +0000
+Reviewed-on: https://review.openstack.org/430071
+Project: openstack/deb-magnum
+Branch: refs/heads/master
