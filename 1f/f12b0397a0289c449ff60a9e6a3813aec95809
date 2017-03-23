@@ -1,0 +1,10 @@
+Code-Review+1: Yan Zhiwei <yan.zhiwei1@zte.com.cn>
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Code-Review+2: Adrian Otto <adrian.otto@rackspace.com>
+Workflow+1: Adrian Otto <adrian.otto@rackspace.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 27 Feb 2017 19:43:47 +0000
+Reviewed-on: https://review.openstack.org/438279
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/ocata

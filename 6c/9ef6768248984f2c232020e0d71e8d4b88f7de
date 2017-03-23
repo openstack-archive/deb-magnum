@@ -1,0 +1,8 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 19 Feb 2017 18:44:50 +0000
+Reviewed-on: https://review.openstack.org/435592
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/ocata
