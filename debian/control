@@ -6,7 +6,7 @@ Uploaders: Thomas Goirand <zigo@debian.org>,
 Build-Depends: debhelper (>= 10),
                dh-python,
                dh-systemd,
-               openstack-pkg-tools (>= 53~),
+               openstack-pkg-tools (>= 54~),
                po-debconf,
                python-all,
                python-pbr (>= 1.8),
@@ -174,7 +174,6 @@ Description: OpenStack containers as a service - API server
 Package: magnum-api
 Architecture: all
 Depends: magnum-common (= ${binary:Version}),
-         net-tools,
          python-openstackclient,
          q-text-as-data,
          ${misc:Depends},
