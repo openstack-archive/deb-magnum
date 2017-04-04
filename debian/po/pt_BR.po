@@ -1,15 +1,15 @@
 # Debconf translations for magnum.
 # Copyright (C) 2012 THE magnum'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the magnum package.
-# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2012-2016.
+# Adriano Rafael Gomes <adrianorg@debian.org>, 2012-2017.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: magnum\n"
 "Report-Msgid-Bugs-To: magnum@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-29 13:38+0000\n"
-"PO-Revision-Date: 2016-03-16 22:47-0300\n"
-"Last-Translator: Adriano Rafael Gomes <adrianorg@arg.eti.br>\n"
+"PO-Revision-Date: 2017-01-11 15:06-0200\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@debian.org>\n"
 "Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
 "org>\n"
 "Language: pt_BR\n"
@@ -215,17 +215,15 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../magnum-api.templates:2001
-#, fuzzy
-#| msgid ""
-#| "Note that you will need to have an up and running Keystone server on "
-#| "which to connect using the Keystone authentication token."
 msgid ""
 "Note that you will need to have an up and running Keystone server on which "
 "to connect using a known admin project name, admin username and password. "
 "The admin auth token is not used anymore."
 msgstr ""
 "Note que você precisará ter um servidor Keystone configurado e em execução "
-"no qual conectar usando o \"token\" de autenticação do Keystone."
+"no qual conectar usando um nome de projeto de administração, nome de usuário "
+"de administração e senha conhecidos. O \"token\" de autenticação de "
+"administração não é mais usado."
 
 #. Type: string
 #. Description
@@ -247,10 +245,8 @@ msgstr ""
 #. Type: string
 #. Description
 #: ../magnum-api.templates:4001
-#, fuzzy
-#| msgid "Keystone authentication token:"
 msgid "Keystone admin name:"
-msgstr "\"Token\" de autenticação Keystone:"
+msgstr "Nome do administrador do Keystone:"
 
 #. Type: string
 #. Description
@@ -264,18 +260,20 @@ msgid ""
 "To register the service endpoint, this package needs to know the Admin "
 "login, name, project name, and password to the Keystone server."
 msgstr ""
+"Para registrar o \"endpoint\" de serviço, esse pacote precisa saber o login "
+"de administração, nome, nome do projeto e senha para o servidor Keystone."
 
 #. Type: string
 #. Description
 #: ../magnum-api.templates:5001
 msgid "Keystone admin project name:"
-msgstr ""
+msgstr "Nome do projeto de administração do Keystone:"
 
 #. Type: password
 #. Description
 #: ../magnum-api.templates:6001
 msgid "Keystone admin password:"
-msgstr ""
+msgstr "Senha de administração do Keystone:"
 
 #. Type: string
 #. Description

@@ -1,14 +1,14 @@
 # German debconf translation of magnum.
 # This file is distributed under the same license as the magnum package.
 # Copyright (C) 2010 United States Government,2010-2011 OpenStack LLC.
-# Copyright (C) of this file 2012-2014 Chris Leick <c.leick@vollbio.de>.
+# Copyright (C) of this file 2012-2016 Chris Leick <c.leick@vollbio.de>.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: magnum 2013.2.1-1\n"
+"Project-Id-Version: magnum 3.1.1-1\n"
 "Report-Msgid-Bugs-To: magnum@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-29 13:38+0000\n"
-"PO-Revision-Date: 2014-01-09 22:51+0100\n"
+"PO-Revision-Date: 2016-10-28 18:11+0100\n"
 "Last-Translator: Chris Leick <c.leick@vollbio.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
 "Language: de\n"
@@ -25,18 +25,13 @@ msgstr "Eine Datenbank für Magnum einrichten?"
 #. Type: boolean
 #. Description
 #: ../magnum-common.templates:2001
-#, fuzzy
-#| msgid ""
-#| "No database has been set up for magnum-registry or glance-api to use. "
-#| "Before continuing, you should make sure you have the following "
-#| "information:"
 msgid ""
 "No database has been set up for Magnum to use. Before continuing, you should "
 "make sure you have the following information:"
 msgstr ""
-"Es wurde keine Datenbank für die Benutzung mit der Magnum-Registry oder das "
-"Magnum-API eingerichtet. Bevor Sie fortfahren, sollten Sie sicherstellen, "
-"dass Sie die folgenden Informationen haben:"
+"Es wurde keine Datenbank für die Benutzung mit Magnum eingerichtet. Bevor Sie "
+"fortfahren, sollten Sie sicherstellen, dass Sie die folgenden Informationen "
+"haben:"
 
 #. Type: boolean
 #. Description
@@ -83,16 +78,11 @@ msgstr "Rechnername des Authentifizierungsservers:"
 #. Type: string
 #. Description
 #: ../magnum-common.templates:3001
-#, fuzzy
-#| msgid ""
-#| "Please specify the hostname of the authentication server for Magnum. "
-#| "Typically this is also the hostname of the OpenStack Identity Service "
-#| "(Keystone)."
 msgid ""
 "Please specify the hostname of the authentication server. Typically this is "
 "also the hostname of the OpenStack Identity Service (Keystone)."
 msgstr ""
-"Bitte geben Sie den Rechnernamen des Magnum-Authentifizierungsservers an. "
+"Bitte geben Sie den Rechnernamen des Authentifizierungsservers an. "
 "Typischerweise ist das gleichzeitig der Rechnername Ihres OpenStack-"
 "Identitätsdienstes (Keystone)."
 
@@ -226,18 +216,15 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../magnum-api.templates:2001
-#, fuzzy
-#| msgid ""
-#| "Note that you will need to have an up and running Keystone server on "
-#| "which to connect using the Keystone authentication token."
 msgid ""
 "Note that you will need to have an up and running Keystone server on which "
 "to connect using a known admin project name, admin username and password. "
 "The admin auth token is not used anymore."
 msgstr ""
-"Beachten Sie, dass Sie einen gestarteten und laufenden Keystone-Server haben "
-"müssen, mit dem Sie sich anhand des Keystone-Authentifizierungs-Tokens "
-"verbinden."
+"Beachten Sie, dass Sie einen konfigurierten und laufenden Keystone-Server "
+"haben müssen, mit dem Sie sich anhand eines bekannten "
+"Administratorprojektnamens, Administratorbenutzernamens und Passworts "
+"verbinden. Das Administratorauthentifizierungs-Token wird nicht mehr benutzt."
 
 #. Type: string
 #. Description
@@ -259,10 +246,8 @@ msgstr ""
 #. Type: string
 #. Description
 #: ../magnum-api.templates:4001
-#, fuzzy
-#| msgid "Keystone authentication token:"
 msgid "Keystone admin name:"
-msgstr "Keystone-Authentifizierungs-Token:"
+msgstr "Keystone-Administratorname:"
 
 #. Type: string
 #. Description
@@ -276,18 +261,21 @@ msgid ""
 "To register the service endpoint, this package needs to know the Admin "
 "login, name, project name, and password to the Keystone server."
 msgstr ""
+"Um den Dienstendpunkt zu registrieren, muss dieses Paket den "
+"Administratoranmeldenamen, Namen, Projektnamen und das Passwort für den "
+"Keystone-Server kennen."
 
 #. Type: string
 #. Description
 #: ../magnum-api.templates:5001
 msgid "Keystone admin project name:"
-msgstr ""
+msgstr "Keystone-Administratorprojektname:"
 
 #. Type: password
 #. Description
 #: ../magnum-api.templates:6001
 msgid "Keystone admin password:"
-msgstr ""
+msgstr "Keystone-Administratorpasswort:"
 
 #. Type: string
 #. Description
@@ -332,41 +320,3 @@ msgstr ""
 "OpenStack unterstützt die Verwendung von Verfügbarkeitszonen, bei der jede "
 "Region einen Ort repräsentiert. Bitte geben Sie die Zone, die Sie benutzen "
 "möchten, bei der Registrierung des Endpunkts an."
-
-#~ msgid ""
-#~ "To configure its endpoint in Keystone, magnum-api needs the Keystone "
-#~ "authentication token."
-#~ msgstr ""
-#~ "Magnum-API benötigt das Keystone-Authentifizierungs-Token, um seinen "
-#~ "Endpunkt in Keystone zu konfigurieren."
-
-#~ msgid "keystone"
-#~ msgstr "Keystone"
-
-#~ msgid "caching"
-#~ msgstr "Zwischenspeichern"
-
-#~ msgid "keystone+caching"
-#~ msgstr "Keystone+Zwischenspeichern"
-
-#~ msgid "cachemanagement"
-#~ msgstr "Zwischenspeicherverwaltung"
-
-#~ msgid "keystone+cachemanagement"
-#~ msgstr "Keystone+Zwischenspeicherverwaltung"
-
-#~ msgid "Pipeline flavor:"
-#~ msgstr "Pipeline-Variante:"
-
-#~ msgid "Please specify the flavor of the pipeline to be used by Magnum."
-#~ msgstr ""
-#~ "Bitte geben Sie die Variante der von Magnum zu benutzenden Pipeline an."
-
-#~ msgid ""
-#~ "If you use the OpenStack Identity Service (Keystone), you might want to "
-#~ "select \"keystone\". If you don't use this service, you can safely choose "
-#~ "\"caching\" only."
-#~ msgstr ""
-#~ "Falls Sie den OpenStack-Identitätsdienst (Keystone) verwenden, möchten "
-#~ "Sie möglicherweise »Keystone« auswählen. Falls Sie diesen Dienst nicht "
-#~ "nutzen, können Sie problemlos »Zwischenspeichern« auswählen."
