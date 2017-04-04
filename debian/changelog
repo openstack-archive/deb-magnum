@@ -1,3 +1,9 @@
+magnum (3.1.1-4) unstable; urgency=medium
+
+  * Brazilian Portuguese debconf templates (Closes: #852444).
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 04 Apr 2017 17:31:50 +0200
+
 magnum (3.1.1-3) unstable; urgency=medium
 
   * Team upload.
