@@ -1,0 +1,10 @@
+Code-Review+1: Vijendar Komalla <vijendar.komalla@rackspace.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: yatin <yatin.karel@nectechnologies.in>
+Workflow+1: yatin <yatin.karel@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 12 Apr 2017 11:00:39 +0000
+Reviewed-on: https://review.openstack.org/451710
+Project: openstack/deb-magnum
+Branch: refs/heads/master
