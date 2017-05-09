@@ -1,0 +1,10 @@
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Code-Review+1: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 09 May 2017 20:08:20 +0000
+Reviewed-on: https://review.openstack.org/427723
+Project: openstack/deb-magnum
+Branch: refs/heads/master
