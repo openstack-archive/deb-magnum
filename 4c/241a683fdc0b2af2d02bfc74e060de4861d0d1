@@ -1,0 +1,10 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: Mark Goddard <mark@stackhpc.com>
+Code-Review+2: Adrian Otto <aotto@aotto.com>
+Workflow+1: Adrian Otto <aotto@aotto.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 10 May 2017 16:40:04 +0000
+Reviewed-on: https://review.openstack.org/455353
+Project: openstack/deb-magnum
+Branch: refs/heads/master
