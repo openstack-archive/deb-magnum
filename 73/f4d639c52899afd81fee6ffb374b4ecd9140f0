@@ -1,0 +1,10 @@
+Code-Review+2: Spyros Trigazis <strigazi@gmail.com>
+Code-Review+1: Kevin Lefevre <lefevre.kevin@gmail.com>
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Workflow+1: Ton Ngo <ton@us.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 10 May 2017 04:28:08 +0000
+Reviewed-on: https://review.openstack.org/456501
+Project: openstack/deb-magnum
+Branch: refs/heads/stable/ocata
