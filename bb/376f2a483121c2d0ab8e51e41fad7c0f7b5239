@@ -1,0 +1,9 @@
+Code-Review+2: Eli Qiao <qiaoliyong@gmail.com>
+Code-Review+2: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 16 May 2017 15:26:33 +0000
+Reviewed-on: https://review.openstack.org/464534
+Project: openstack/deb-magnum
+Branch: refs/heads/master
