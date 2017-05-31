@@ -1,0 +1,9 @@
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: Adrian Otto <aotto@aotto.com>
+Workflow+1: Adrian Otto <aotto@aotto.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 31 May 2017 15:58:51 +0000
+Reviewed-on: https://review.openstack.org/465060
+Project: openstack/deb-magnum
+Branch: refs/heads/master
