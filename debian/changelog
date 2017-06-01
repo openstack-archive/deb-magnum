@@ -1,3 +1,10 @@
+magnum (3.1.1-5) unstable; urgency=medium
+
+  * Team upload.
+  * Fix CVE-2016-7404 (Closes: #863547)
+
+ -- Ondřej Nový <onovy@debian.org>  Thu, 01 Jun 2017 16:31:39 +0200
+
 magnum (3.1.1-4) unstable; urgency=medium
 
   * Brazilian Portuguese debconf templates (Closes: #852444).
