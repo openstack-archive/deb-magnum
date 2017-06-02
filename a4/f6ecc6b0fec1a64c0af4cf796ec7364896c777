@@ -1,0 +1,10 @@
+Code-Review+1: Nguyen Phuong An <AnNP@vn.fujitsu.com>
+Code-Review+1: Nguyen Hung Phuong <phuongnh@vn.fujitsu.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 02 Jun 2017 05:39:01 +0000
+Reviewed-on: https://review.openstack.org/469803
+Project: openstack/deb-magnum
+Branch: refs/heads/master
