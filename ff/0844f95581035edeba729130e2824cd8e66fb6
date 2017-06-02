@@ -1,0 +1,9 @@
+Code-Review+2: Ton Ngo <ton@us.ibm.com>
+Code-Review+2: yatin <ykarel@redhat.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 02 Jun 2017 08:52:52 +0000
+Reviewed-on: https://review.openstack.org/462962
+Project: openstack/deb-magnum
+Branch: refs/heads/master
