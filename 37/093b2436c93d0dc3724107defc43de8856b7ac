@@ -1,0 +1,10 @@
+Code-Review+1: jinzhenguo <jinzhenguo88@sina.com>
+Code-Review+2: Adrian Otto <aotto@aotto.com>
+Code-Review+2: yatin <ykarel@redhat.com>
+Workflow+1: yatin <ykarel@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 16 Jun 2017 06:58:02 +0000
+Reviewed-on: https://review.openstack.org/474084
+Project: openstack/deb-magnum
+Branch: refs/heads/master
