@@ -1,0 +1,10 @@
+Code-Review+2: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Code-Review+1: Johannes Grassler <jgr-launchpad@btw23.de>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 28 Jun 2017 07:18:57 +0000
+Reviewed-on: https://review.openstack.org/458149
+Project: openstack/deb-magnum
+Branch: refs/heads/master
