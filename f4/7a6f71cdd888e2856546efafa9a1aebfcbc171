@@ -1,0 +1,11 @@
+Code-Review+1: Akihiro Motoki <amotoki@gmail.com>
+Code-Review+1: Nguyen Van Trung <trungnv@vn.fujitsu.com>
+Code-Review+2: yatin <ykarel@redhat.com>
+Code-Review+2: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 12 Jul 2017 11:47:08 +0000
+Reviewed-on: https://review.openstack.org/480986
+Project: openstack/deb-magnum
+Branch: refs/heads/master
