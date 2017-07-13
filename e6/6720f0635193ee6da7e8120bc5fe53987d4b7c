@@ -1,0 +1,10 @@
+Code-Review+1: Chason Chan <chason.chan@foxmail.com>
+Code-Review+2: yatin <ykarel@redhat.com>
+Code-Review+2: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Workflow+1: Spyros Trigazis (strigazi) <strigazi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 13 Jul 2017 11:41:12 +0000
+Reviewed-on: https://review.openstack.org/482522
+Project: openstack/deb-magnum
+Branch: refs/heads/master
