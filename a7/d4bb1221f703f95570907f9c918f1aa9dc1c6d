@@ -1,0 +1,10 @@
+Code-Review+2: yatin <ykarel@redhat.com>
+Code-Review+1: Danil Golov <d.golov@partner.samsung.com>
+Code-Review+2: Madhuri Kumari <madhuri.kumari@intel.com>
+Workflow+1: Madhuri Kumari <madhuri.kumari@intel.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 20 Jul 2017 04:25:24 +0000
+Reviewed-on: https://review.openstack.org/483763
+Project: openstack/deb-magnum
+Branch: refs/heads/master
