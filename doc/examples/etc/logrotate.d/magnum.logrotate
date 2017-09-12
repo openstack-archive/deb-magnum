@@ -1,7 +1,0 @@
-/var/log/magnum/*.log {
-    rotate 14
-    size 10M
-    missingok
-    compress
-    copytruncate
-}

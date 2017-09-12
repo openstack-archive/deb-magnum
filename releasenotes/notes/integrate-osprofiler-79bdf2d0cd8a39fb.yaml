@@ -1,5 +1,0 @@
----
-features:
-  - Magnum now support OSProfiler for HTTP, RPC and DB request tracing.
-    User can enable OSProfiler via Magnum configuration file in 'profiler'
-    section.

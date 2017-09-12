@@ -1,6 +1,0 @@
----
-features:
-  - |
-    Secure etcd cluster for swarm and k8s. Etcd cluster is
-    secured using TLS by default. TLS can be disabled by
-    passing --tls-disabled during cluster template creation.
